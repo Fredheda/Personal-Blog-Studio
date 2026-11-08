@@ -31,7 +31,10 @@ echo "Storage account: $ACCOUNT ($SA_RG). Mode: $([ "$APPLY" -eq 1 ] && echo APP
 
 # 1. CORS -------------------------------------------------------------------
 cors=$(az storage cors list --services b --account-name "$ACCOUNT" --auth-mode login -o json)
-if jq -e --arg o "$ORIGIN" 'any(.[]; (.AllowedOrigins | tostring) | contains($o))' <<<"$cors" >/dev/null; then
+# Exact match against the comma-separated origin list: a look-alike such as
+# "<origin>.example.test" must not count as ours.
+if jq -e --arg o "$ORIGIN" '
+  any(.[]; (.AllowedOrigins | tostring | split(",") | map(gsub("^\\s+|\\s+$"; ""))) | index($o) != null)' <<<"$cors" >/dev/null; then
   echo "CORS: $ORIGIN already allowed."
 else
   run az storage cors add --services b --methods OPTIONS PUT --origins "$ORIGIN" \

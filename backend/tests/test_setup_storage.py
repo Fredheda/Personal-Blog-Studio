@@ -97,6 +97,35 @@ def test_apply_adds_the_cors_rule_when_the_origin_is_missing(fake_az: FakeAz) ->
     assert "--methods OPTIONS PUT" in adds[0]
 
 
+def test_a_look_alike_origin_does_not_count_as_ours(fake_az: FakeAz) -> None:
+    lookalike = json.dumps(
+        [
+            {
+                "Service": "blob",
+                "AllowedOrigins": f"{ORIGIN}.example.test,https://other.test",
+                "AllowedMethods": "OPTIONS,PUT",
+            }
+        ]
+    )
+    fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": lookalike})
+    adds = [c for c in writes(fake_az) if c.startswith("storage cors add")]
+    assert len(adds) == 1
+
+
+def test_the_origin_is_found_among_several_in_one_rule(fake_az: FakeAz) -> None:
+    several = json.dumps(
+        [
+            {
+                "Service": "blob",
+                "AllowedOrigins": f"https://a.test, {ORIGIN} ,https://b.test",
+                "AllowedMethods": "OPTIONS,PUT",
+            }
+        ]
+    )
+    fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": several})
+    assert not [c for c in writes(fake_az) if c.startswith("storage cors add")]
+
+
 def test_the_cors_rule_is_not_added_twice(fake_az: FakeAz) -> None:
     result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OURS})
     assert result.returncode == 0, result.stderr
