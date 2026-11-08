@@ -10,6 +10,21 @@ PR titles and descriptions never mention Claude Code.
 
 Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) behind Easy Auth, plus the blog read API, which is not public: only approved callers with an Entra token can use it. Posts, media and audio live in private Azure storage, never in this repo. The backend and frontend skeletons exist (health endpoints, home page only); the studio UI, content model and read API follow the system spec at `../docs/shared/specs/2026-11-08-blog-studio.md` (workspace root). Overview: `README.md`.
 
+## Azure
+
+`DEPLOYMENT.md` has the resources, the order of operations and the gotchas. These commands change shared production state: run them only on the owner's explicit yes for that run.
+
+| Task | Command |
+|------|---------|
+| Build images (ACR Tasks) | `./scripts/build-push.sh [full-sha]` |
+| Shared storage setup (dry run; `--apply` changes the shared account) | `./scripts/setup-storage.sh [--apply]` |
+| Provision or update Azure (needs built images and `.env`) | `./infra/deploy.sh <full-sha>` |
+| Compile the Bicep (local, no login) | `az bicep build --file infra/main.bicep --stdout >/dev/null` |
+
+- Script tests use a fake `az` (`backend/tests/conftest.py`); the Bicep is checked structurally (`backend/tests/test_infra_bicep.py`). Check shell scripts with `shellcheck -x -P SCRIPTDIR`.
+- The read API identity has no role on `blog-drafts` and no write role anywhere; `approvedClientIds` cannot be empty; no auth config is conditional. Tests pin all three.
+- `deploy.sh` needs the Entra IDs and the owner's object ID in the git-ignored `.env` (names in `.env.example`; the IDs come from the BLOG-15 setup scripts) and an explicit full SHA whose images exist. The Easy Auth secret goes to `az` only through a mode-600 temporary file, never through a command line (`az` or `jq`).
+
 ## Commands
 
 Python 3.13 with Poetry 2 (backend); Node 24 with npm 12.2.2 (frontend, Next.js 16). Run from the repo root unless noted.
