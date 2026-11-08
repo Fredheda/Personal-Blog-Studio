@@ -13,3 +13,4 @@ Status: backend skeleton (health endpoints, Dockerfiles, CI). The system design 
 - CI: `.github/workflows/ci.yml` (`workflow-lint`, `backend-test`, `backend-lint`) on pull requests; run `./scripts/ci-local.sh` before opening for review.
 - AI PR review: `.github/workflows/claude-review.yml`, secret `CLAUDE_CODE_OAUTH_TOKEN`.
 - `main` accepts changes through pull requests only.
+- Azure: `DEPLOYMENT.md` (Bicep in `infra/`, image and storage scripts in `scripts/`). The infrastructure code exists; nothing is deployed yet.
