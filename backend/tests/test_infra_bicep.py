@@ -61,7 +61,9 @@ def test_auth_is_never_optional_and_always_enabled() -> None:
 def test_the_apis_return_401_and_the_web_app_redirects() -> None:
     assert "unauthenticatedClientAction: 'Return401'" in block(MAIN, "studioApiAuth")
     assert "unauthenticatedClientAction: 'Return401'" in block(MAIN, "blogApiAuth")
-    assert "unauthenticatedClientAction: 'RedirectToLoginPage'" in block(MAIN, "webAuth")
+    assert "unauthenticatedClientAction: 'RedirectToLoginPage'" in block(
+        MAIN, "webAuth"
+    )
 
 
 def test_the_allow_lists_are_set_and_the_read_api_list_cannot_be_empty() -> None:

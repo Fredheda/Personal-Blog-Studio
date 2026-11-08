@@ -3,7 +3,11 @@ import subprocess
 from conftest import REPO_ROOT, FakeAz
 
 HEAD = subprocess.run(
-    ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+    ["git", "rev-parse", "HEAD"],
+    cwd=REPO_ROOT,
+    capture_output=True,
+    text=True,
+    check=True,
 ).stdout.strip()
 
 IMAGES = [

@@ -56,7 +56,13 @@ OUR_RULE_AS_RETURNED = {
     },
 }
 CORS_OTHER = json.dumps(
-    [{"Service": "blob", "AllowedOrigins": "https://example.test", "AllowedMethods": "GET"}]
+    [
+        {
+            "Service": "blob",
+            "AllowedOrigins": "https://example.test",
+            "AllowedMethods": "GET",
+        }
+    ]
 )
 CORS_OURS = json.dumps(
     [{"Service": "blob", "AllowedOrigins": ORIGIN, "AllowedMethods": "OPTIONS,PUT"}]
@@ -101,7 +107,11 @@ def test_soft_delete_is_enabled_only_where_it_is_off(fake_az: FakeAz) -> None:
     result = fake_az.run(
         SCRIPT,
         "--apply",
-        env={"FAKE_BLOB_SD": "true", "FAKE_CONTAINER_SD": "false", "FAKE_CORS": CORS_OURS},
+        env={
+            "FAKE_BLOB_SD": "true",
+            "FAKE_CONTAINER_SD": "false",
+            "FAKE_CORS": CORS_OURS,
+        },
     )
     assert result.returncode == 0, result.stderr
     updates = [c for c in writes(fake_az) if "blob-service-properties update" in c]
@@ -126,7 +136,9 @@ def policy_arg(call: str) -> dict:
 def test_the_lifecycle_rule_is_merged_with_the_existing_rules(fake_az: FakeAz) -> None:
     existing = json.dumps({"policy": {"rules": [OTHER_RULE]}})
     result = fake_az.run(
-        SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OURS, "FAKE_POLICY": existing}
+        SCRIPT,
+        "--apply",
+        env={**ALL_ON, "FAKE_CORS": CORS_OURS, "FAKE_POLICY": existing},
     )
     assert result.returncode == 0, result.stderr
     creates = [c for c in writes(fake_az) if "management-policy create" in c]
@@ -145,7 +157,9 @@ def test_an_identical_lifecycle_rule_is_not_written_again(fake_az: FakeAz) -> No
     # Live-shaped: the returned rule carries extra null keys.
     existing = json.dumps({"policy": {"rules": [OTHER_RULE, OUR_RULE_AS_RETURNED]}})
     result = fake_az.run(
-        SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OURS, "FAKE_POLICY": existing}
+        SCRIPT,
+        "--apply",
+        env={**ALL_ON, "FAKE_CORS": CORS_OURS, "FAKE_POLICY": existing},
     )
     assert result.returncode == 0, result.stderr
     assert not [c for c in writes(fake_az) if "management-policy create" in c]
@@ -156,9 +170,14 @@ def test_a_changed_rule_of_ours_is_replaced_not_duplicated(fake_az: FakeAz) -> N
     stale = {**OUR_RULE, "enabled": False}
     existing = json.dumps({"policy": {"rules": [stale, OTHER_RULE]}})
     fake_az.run(
-        SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OURS, "FAKE_POLICY": existing}
+        SCRIPT,
+        "--apply",
+        env={**ALL_ON, "FAKE_CORS": CORS_OURS, "FAKE_POLICY": existing},
     )
     creates = [c for c in writes(fake_az) if "management-policy create" in c]
     rules = policy_arg(creates[0])["rules"]
-    assert [r["name"] for r in rules] == ["other-project-cleanup", "blog-drafts-uploads-30d"]
+    assert [r["name"] for r in rules] == [
+        "other-project-cleanup",
+        "blog-drafts-uploads-30d",
+    ]
     assert rules[1]["enabled"] is True
