@@ -1,0 +1,31 @@
+name: CI
+
+# Minimal baseline until the stack is fixed (docs/shared/specs/2026-11-08-blog-studio.md
+# in the workspace). Add the stack's test and lint jobs with the first code PR.
+# Job ids become required-check names in the `main` ruleset.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to the same PR cancels the run that is still going. Pushes to
+# main are never cancelled, so every commit on main gets a result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Lints the workflow files with the pinned actionlint image.
+  workflow-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint workflows
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 \
+            -color
