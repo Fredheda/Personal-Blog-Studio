@@ -1,15 +1,15 @@
 # Personal-Blog-Studio
 
-Blog authoring studio and internal blog read API.
+Blog authoring studio and blog read API (not public: approved callers with an Entra token only).
 
-- **Studio:** WYSIWYG editor (maths, code, images, video), AI writing agent, read-aloud audio. Behind Azure Easy Auth, owner only.
+- **Studio:** WYSIWYG editor (maths, code, images, video), AI writing agent (read-aloud audio comes later). Behind Azure Easy Auth, owner only.
 - **Read API:** versioned (`v1`), documented with OpenAPI, not public. Clients are separate apps.
 - **Storage:** posts, media and audio live in private Azure storage, never in this repo.
 
-Status: baseline only (CI, AI PR review, repo settings). The system design is being specced; no application code yet.
+Status: backend skeleton (health endpoints, Dockerfiles, CI). The system design is the workspace spec `2026-11-08-blog-studio.md`; the editor, content model and read API are not built yet.
 
 ## Repo setup
 
-- CI: `.github/workflows/ci.yml` (`workflow-lint` for now).
+- CI: `.github/workflows/ci.yml` (`workflow-lint`, `backend-test`, `backend-lint`) on pull requests; run `./scripts/ci-local.sh` before opening for review.
 - AI PR review: `.github/workflows/claude-review.yml`, secret `CLAUDE_CODE_OAUTH_TOKEN`.
 - `main` accepts changes through pull requests only.

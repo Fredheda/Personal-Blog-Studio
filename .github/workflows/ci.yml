@@ -1,19 +1,15 @@
 name: CI
 
-# Minimal baseline until the stack is fixed (docs/shared/specs/2026-11-08-blog-studio.md
-# in the workspace). Add the stack's test and lint jobs with the first code PR.
-# Job ids become required-check names in the `main` ruleset.
+# Job ids become required-check names in the `main` ruleset. Frontend jobs
+# join with the frontend skeleton.
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
-# A new push to the same PR cancels the run that is still going. Pushes to
-# main are never cancelled, so every commit on main gets a result.
+# A new push to the same PR cancels the run that is still going.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -29,3 +25,41 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 \
             -color
+
+  backend-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Poetry
+        run: pipx install "poetry>=2.0,<3.0"
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: backend/.python-version
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+      - run: poetry install --no-interaction
+      - run: poetry run pytest -v
+
+  backend-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Poetry
+        run: pipx install "poetry>=2.0,<3.0"
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: backend/.python-version
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+      - run: poetry install --no-interaction
+      - run: poetry run ruff check .
+      - run: poetry run ruff format --check .
+      - run: poetry run pyright

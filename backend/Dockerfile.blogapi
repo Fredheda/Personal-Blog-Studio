@@ -1,0 +1,24 @@
+# Read API image. Build context is backend/: `docker build -f Dockerfile.blogapi .`
+# Contains blog_core and blog_api only: no studio, agent or LLM code.
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir "poetry>=2.0,<3.0" \
+    && poetry config virtualenvs.in-project true
+
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --only main --no-interaction --no-ansi
+
+FROM python:3.13-slim
+
+WORKDIR /app
+RUN useradd --system --uid 10001 --no-create-home appuser
+COPY --from=builder /app/.venv ./.venv
+COPY blog_core/ ./blog_core/
+COPY blog_api/ ./blog_api/
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
+
+USER appuser
+EXPOSE 8000
+CMD ["uvicorn", "blog_api.app:app", "--host", "0.0.0.0", "--port", "8000"]
