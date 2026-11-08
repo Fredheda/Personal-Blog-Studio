@@ -1,7 +1,6 @@
 name: CI
 
-# Job ids become required-check names in the `main` ruleset. Frontend jobs
-# join with the frontend skeleton.
+# Job ids become required-check names in the `main` ruleset.
 
 on:
   pull_request:
@@ -63,3 +62,41 @@ jobs:
       - run: poetry run ruff check .
       - run: poetry run ruff format --check .
       - run: poetry run pyright
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # frontend/package.json uses npm 12's allowScripts; match the Dockerfile.
+      - run: npm install -g npm@12.2.2 && npm --version
+      - run: npm ci
+      - run: npm test
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm install -g npm@12.2.2 && npm --version
+      - run: npm ci
+      - run: npm run lint
+      # The build writes next-env.d.ts, which tsc needs, so it runs first.
+      - run: npm run build
+      - run: npx tsc --noEmit
