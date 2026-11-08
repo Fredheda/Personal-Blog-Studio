@@ -76,6 +76,15 @@ def test_the_allow_lists_are_set_and_the_read_api_list_cannot_be_empty() -> None
     )
 
 
+def test_the_web_app_admits_only_the_owner() -> None:
+    # Owner-only does not rest on the Entra "assignment required" setting alone:
+    # the auth config names the one allowed identity.
+    assert re.search(r"^param ownerObjectId string$", MAIN, re.MULTILINE)
+    web = block(MAIN, "webAuth")
+    assert "allowedPrincipals" in web
+    assert "identities: [\n                ownerObjectId\n              ]" in web
+
+
 def test_the_audiences_are_the_api_app_ids() -> None:
     assert "'api://${studioApiClientId}'" in block(MAIN, "studioApiAuth")
     assert "'api://${blogApiClientId}'" in block(MAIN, "blogApiAuth")

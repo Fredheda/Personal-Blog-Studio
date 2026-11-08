@@ -23,7 +23,7 @@ Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) b
 
 - Script tests use a fake `az` (`backend/tests/conftest.py`); the Bicep is checked structurally (`backend/tests/test_infra_bicep.py`). Check shell scripts with `shellcheck -x -P SCRIPTDIR`.
 - The read API identity has no role on `blog-drafts` and no write role anywhere; `approvedClientIds` cannot be empty; no auth config is conditional. Tests pin all three.
-- `deploy.sh` needs the Entra IDs from the setup scripts (BLOG-15) in the git-ignored `.env` (names in `.env.example`) and an explicit full SHA whose images exist.
+- `deploy.sh` needs the Entra IDs and the owner's object ID in the git-ignored `.env` (names in `.env.example`; the IDs come from the BLOG-15 setup scripts) and an explicit full SHA whose images exist. The Easy Auth secret goes to `az` only through a mode-600 temporary file, never through a command line (`az` or `jq`).
 
 ## Commands
 

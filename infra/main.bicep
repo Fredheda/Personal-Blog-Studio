@@ -43,6 +43,9 @@ param imageTag string
 @description('Entra tenant ID.')
 param tenantId string
 
+@description('Entra object ID of the owner, the only identity the studio web app admits. Defense in depth next to the enterprise app\'s "assignment required" setting.')
+param ownerObjectId string
+
 @description('Client ID of the Entra app registration behind Easy Auth on the studio web app.')
 param webClientId string
 
@@ -353,6 +356,13 @@ resource webAuth 'Microsoft.App/containerApps/authConfigs@2025-01-01' = {
           allowedAudiences: [
             webClientId
           ]
+          defaultAuthorizationPolicy: {
+            allowedPrincipals: {
+              identities: [
+                ownerObjectId
+              ]
+            }
+          }
         }
       }
     }

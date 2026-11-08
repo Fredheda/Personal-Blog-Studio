@@ -16,6 +16,7 @@ at call time, because the script deletes the file when it exits.
 """
 
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,6 +63,7 @@ exit 0
 class FakeAz:
     log: Path
     bin_dir: Path
+    real_jq: str = "jq"
 
     def run(
         self, script: str, *args: str, env: dict[str, str] | None = None
@@ -70,6 +72,7 @@ class FakeAz:
             **os.environ,
             "PATH": f"{self.bin_dir}{os.pathsep}{os.environ['PATH']}",
             "FAKE_LOG": str(self.log),
+            "REAL_JQ": self.real_jq,
             **(env or {}),
         }
         return subprocess.run(
@@ -90,10 +93,24 @@ class FakeAz:
         build_log = Path(f"{self.log}.build-dir")
         return build_log.read_text().splitlines() if build_log.exists() else []
 
+    @property
+    def jq_calls(self) -> list[str]:
+        """Arguments of every `jq` call, as another process could see them."""
+        jq_log = Path(f"{self.log}.jq")
+        return jq_log.read_text().splitlines() if jq_log.exists() else []
+
     def side_file(self, suffix: str) -> str:
         """Text the fake saved next to the log (params, mode, paramfile)."""
         path = Path(f"{self.log}.{suffix}")
         return path.read_text().strip() if path.exists() else ""
+
+
+# Logs the arguments of every `jq` call (what another local process could read
+# from the process list), then runs the real jq.
+FAKE_JQ = r"""#!/usr/bin/env bash
+echo "$*" >> "$FAKE_LOG.jq"
+exec "$REAL_JQ" "$@"
+"""
 
 
 @pytest.fixture
@@ -103,4 +120,11 @@ def fake_az(tmp_path: Path) -> FakeAz:
     az = bin_dir / "az"
     az.write_text(FAKE_AZ)
     az.chmod(0o755)
-    return FakeAz(log=tmp_path / "az.log", bin_dir=bin_dir)
+    jq = bin_dir / "jq"
+    jq.write_text(FAKE_JQ)
+    jq.chmod(0o755)
+    return FakeAz(
+        log=tmp_path / "az.log",
+        bin_dir=bin_dir,
+        real_jq=shutil.which("jq") or "jq",
+    )

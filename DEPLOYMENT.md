@@ -7,7 +7,7 @@ How the blog studio and the blog read API reach Azure. Everything here changes s
 | Resource | Where | Note |
 |---|---|---|
 | `cae-blogstudio` | `rg-chatbot` | Container Apps environment, no Log Analytics (`az containerapp logs show --follow` for live logs) |
-| `ca-blogstudio-web` | `rg-chatbot` | Next.js studio, external ingress, Easy Auth (owner only) |
+| `ca-blogstudio-web` | `rg-chatbot` | Next.js studio, external ingress, Easy Auth; only the owner's object ID (`BLOG_OWNER_OBJECT_ID`) is admitted, on top of the Entra enterprise app's "assignment required" setting (BLOG-15) |
 | `ca-blogstudio-api` | `rg-chatbot` | FastAPI studio API, internal ingress, token validation (web identity only) |
 | `ca-blogapi` | `rg-chatbot` | FastAPI read API `v1`, external hostname, token validation (approved callers only) |
 | `id-blogstudio-acrpull`, `id-blogstudio-web`, `id-blogstudio-api`, `id-blogapi` | `rg-chatbot` | managed identities: registry pull, one runtime identity per app |
@@ -21,7 +21,7 @@ Roles (least privilege): the studio API identity is Storage Blob Data Contributo
 ## Order of operations (first deploy)
 
 1. `./scripts/build-push.sh <full-sha>` builds the three images with ACR Tasks (skips existing ones).
-2. Entra app registrations and the `.env` values (`.env.example`): the setup scripts of BLOG-15. `infra/deploy.sh` refuses to run without them.
+2. Entra app registrations and the `.env` values (`.env.example`): the setup scripts of BLOG-15. The owner's object ID is `az ad signed-in-user show --query id -o tsv` run as the owner. `infra/deploy.sh` refuses to run without them.
 3. `./scripts/setup-storage.sh` (dry run: read the output), then `./scripts/setup-storage.sh --apply` with the owner's yes. It adds one CORS rule, turns on soft delete where it is off and merges one lifecycle rule; it never replaces other projects' settings.
 4. `./infra/deploy.sh <full-sha>` with the owner's yes. It checks the SHA, the settings and the images before it touches Azure, and passes the parameters (including the Easy Auth client secret) in a mode-600 temporary file.
 5. The three-step live gate (BLOG-15): an unauthenticated request gets 401; an authenticated but unapproved caller is rejected; the approved caller succeeds.

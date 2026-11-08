@@ -11,6 +11,7 @@ REQUIRED = {
     "BLOG_STUDIO_API_CLIENT_ID": "sapi-1",
     "BLOG_API_CLIENT_ID": "api-1",
     "BLOG_APPROVED_CLIENT_IDS": "caller-1,caller-2",
+    "BLOG_OWNER_OBJECT_ID": "owner-1",
     "BLOG_WEB_CLIENT_SECRET": "s3cret-value",
 }
 
@@ -57,6 +58,13 @@ def test_a_missing_setting_is_named_and_stops_before_azure(
     assert fake_az.calls == []
 
 
+def test_the_owner_object_id_is_required(fake_az: FakeAz, tmp_path: Path) -> None:
+    result = fake_az.run(SCRIPT, SHA, env=env(tmp_path, BLOG_OWNER_OBJECT_ID="UNSET"))
+    assert result.returncode == 2
+    assert "BLOG_OWNER_OBJECT_ID" in result.stderr
+    assert fake_az.calls == []
+
+
 def test_an_empty_approved_caller_list_is_refused(
     fake_az: FakeAz, tmp_path: Path
 ) -> None:
@@ -97,6 +105,7 @@ def test_a_good_run_deploys_once_with_the_sha_and_the_caller_list(
     assert params["tenantId"]["value"] == "tenant-1"
     assert params["studioApiClientId"]["value"] == "sapi-1"
     assert params["blogApiClientId"]["value"] == "api-1"
+    assert params["ownerObjectId"]["value"] == "owner-1"
 
 
 def test_the_secret_travels_in_a_private_temporary_file_only(
@@ -104,8 +113,11 @@ def test_the_secret_travels_in_a_private_temporary_file_only(
 ) -> None:
     result = fake_az.run(SCRIPT, SHA, env=env(tmp_path))
     assert result.returncode == 0, result.stderr
-    # Never on the az command line, never in the script output.
+    # Never on the az command line, never in jq's arguments (another process
+    # could read either from the process list), never in the script output.
     assert "s3cret-value" not in "\n".join(fake_az.calls)
+    assert fake_az.jq_calls, "the parameters file is built with jq"
+    assert "s3cret-value" not in "\n".join(fake_az.jq_calls)
     assert "s3cret-value" not in result.stdout + result.stderr
     # It is in the parameters file, which is owner-only and gone after the run.
     params = json.loads(fake_az.side_file("params"))["parameters"]
