@@ -1,0 +1,44 @@
+# Baseline for every repo. Merge into the repo's .gitignore; do not duplicate lines.
+# An intentionally tracked env file (e.g. a public API base URL) stays tracked
+# even though these patterns would match it; say so in the review prompt.
+
+# Env / secrets
+.env
+.env*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+local.settings.json
+terraform.tfstate
+terraform.tfstate.*
+.azure/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / Next.js / Vite
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
