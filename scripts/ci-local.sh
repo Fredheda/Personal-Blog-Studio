@@ -3,7 +3,7 @@
 # `gh pr ready`. A test in backend/tests keeps this file and ci.yml in step:
 # every ci.yml job id appears below as a `step "<job-id>"`.
 #
-# Needs `poetry install` once in backend/. workflow-lint uses a local
+# Needs `poetry install` once in backend/ and `npm ci` once in frontend/. workflow-lint uses a local
 # `actionlint` if present, else Docker.
 #
 # Usage: ./scripts/ci-local.sh
@@ -27,6 +27,12 @@ step "backend-test"
 
 step "backend-lint"
 (cd backend && poetry run ruff check . && poetry run ruff format --check . && poetry run pyright)
+
+step "frontend-test"
+(cd frontend && npm test)
+
+step "frontend-checks"
+(cd frontend && npm run lint && npm run build && npx tsc --noEmit)
 
 echo
 echo "ci-local: all checks passed."
