@@ -59,18 +59,22 @@ trap cleanup EXIT
 # so exactly one exists afterwards and it is the one this run removes on exit.
 SECRET=""
 temp_secret() {
-  local old keys
+  local old key keys
   for old in $(az ad app credential list --id "$1" --query "[?displayName=='blog-gate'].keyId" -o tsv); do
     az ad app credential delete --id "$1" --key-id "$old" --output none
   done
   SECRET=$(az ad app credential reset --id "$1" --append --display-name blog-gate \
     --end-date "$END" --query password -o tsv)
   keys=$(az ad app credential list --id "$1" --query "[?displayName=='blog-gate'].keyId" -o tsv)
+  # Register every blog-gate credential for removal before the check, so the one
+  # just created is cleaned up even when the check stops the script.
+  for key in $keys; do
+    created+=("$1:$key")
+  done
   if [ "$(printf '%s\n' "$keys" | grep -c .)" -ne 1 ]; then
     echo "ERROR: expected exactly one blog-gate credential on $1, found: ${keys:-none}" >&2
     exit 1
   fi
-  created+=("$1:$keys")
 }
 
 # Ask Entra for a token as client $1 (secret in $SECRET). Sets TOKEN, and

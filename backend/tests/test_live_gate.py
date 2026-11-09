@@ -171,6 +171,22 @@ def test_a_stale_credential_from_an_interrupted_run_is_cleared_first(
     assert len(deletes(fake_az)) == 3
 
 
+def test_a_new_credential_is_removed_when_the_one_credential_check_fails(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # A blog-gate credential that cannot be deleted makes the count two; the
+    # script stops, but the credential it just created must still be removed.
+    result = run(
+        fake_az,
+        tmp_path,
+        "--run",
+        FAKE_PERSISTENT_KEYS="appid-blogapi-gate-denied:ghost",
+    )
+    assert result.returncode == 1
+    assert "expected exactly one" in result.stderr
+    assert any("--key-id key-1" in c for c in deletes(fake_az))
+
+
 def test_the_credentials_are_short_lived(fake_az: FakeAz, tmp_path: Path) -> None:
     run(fake_az, tmp_path, "--run")
     for call in resets(fake_az):

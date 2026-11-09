@@ -94,6 +94,8 @@ case "$*" in
     } | grep -v '^$' | while read -r k; do
       grep -qx "$k" "$st/deleted" 2>/dev/null || echo "$k"
     done
+    # FAKE_PERSISTENT_KEYS ("app:key"): listed again even after a delete.
+    echo "${FAKE_PERSISTENT_KEYS:-}" | tr ',' '\n' | grep "^$app:" | cut -d: -f2
     exit 0 ;;
   "ad app credential delete"*)
     key=$(echo "$*" | sed -E 's/.*--key-id ([^ ]+).*/\1/')
