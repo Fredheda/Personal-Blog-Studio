@@ -177,3 +177,20 @@ def test_role_ids_are_the_verified_built_in_ids() -> None:
 def test_the_containers_are_private() -> None:
     for name in ("drafts", "published"):
         assert "publicAccess: 'None'" in block(STORAGE, name)
+
+
+def test_the_web_app_declares_its_custom_domain_so_a_redeploy_keeps_it() -> None:
+    web = block(MAIN, "web")
+    assert "customDomains: empty(webCustomDomain) ? [] : [" in web
+    assert (
+        "certificateId: '${appEnvironment.id}/managedCertificates/${webCertificateName}'"
+        in web
+    )
+    assert "bindingType: 'SniEnabled'" in web
+    assert "param webCustomDomain string = ''" in MAIN
+    assert "param webCertificateName string = ''" in MAIN
+
+
+def test_only_the_web_app_has_a_custom_domain() -> None:
+    for app in ("studioApi", "blogApi"):
+        assert "customDomains" not in block(MAIN, app), app

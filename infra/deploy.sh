@@ -43,6 +43,15 @@ if [ "${#missing[@]}" -gt 0 ]; then
   exit 2
 fi
 
+# Optional custom domain of the web app, written by scripts/bind-domain.sh. Both
+# settings or neither: a half-set pair would unbind the domain on deploy.
+WEB_DOMAIN=${BLOG_WEB_CUSTOM_DOMAIN:-}
+WEB_CERT=${BLOG_WEB_CERTIFICATE_NAME:-}
+if { [ -n "$WEB_DOMAIN" ] && [ -z "$WEB_CERT" ]; } || { [ -z "$WEB_DOMAIN" ] && [ -n "$WEB_CERT" ]; }; then
+  echo "ERROR: set BLOG_WEB_CUSTOM_DOMAIN and BLOG_WEB_CERTIFICATE_NAME together or not at all." >&2
+  exit 2
+fi
+
 # Comma list to a JSON array, dropping blanks. An empty list could let any caller
 # with a valid token through, so it is refused.
 approved=$(printf '%s' "$BLOG_APPROVED_CLIENT_IDS" | tr -d ' ' | jq -R -c 'split(",") | map(select(length > 0))')
@@ -65,6 +74,18 @@ for entry in "${IMAGES[@]}"; do
   fi
 done
 
+# ARM's PUT treats the web app's ingress as authoritative: a deploy that does not
+# declare the domain bound today would silently unbind it. Stop instead. On the
+# first deploy the app does not exist yet and nothing is bound.
+bound=$(az containerapp show -n ca-blogstudio-web -g "$RG" \
+  --query "properties.configuration.ingress.customDomains[].name" -o tsv 2>/dev/null || true)
+for name in $bound; do
+  if [ "$name" != "$WEB_DOMAIN" ]; then
+    echo "ERROR: ca-blogstudio-web has the custom domain '$name' bound, but this deploy would drop it. Set BLOG_WEB_CUSTOM_DOMAIN and BLOG_WEB_CERTIFICATE_NAME in $ENV_FILE (scripts/bind-domain.sh writes them)." >&2
+    exit 1
+  fi
+done
+
 # Parameters go through a mode-600 temporary file, so the Easy Auth client secret
 # is never on a command line (visible to other processes) and the file is deleted
 # when the script exits. The secret reaches jq through its environment
@@ -76,6 +97,7 @@ WEB_CLIENT_SECRET="$BLOG_WEB_CLIENT_SECRET" jq -n \
   --arg imageTag "$SHA" --arg tenantId "$BLOG_TENANT_ID" \
   --arg ownerObjectId "$BLOG_OWNER_OBJECT_ID" --arg webClientId "$BLOG_WEB_CLIENT_ID" \
   --arg studioApiClientId "$BLOG_STUDIO_API_CLIENT_ID" --arg blogApiClientId "$BLOG_API_CLIENT_ID" \
+  --arg webCustomDomain "$WEB_DOMAIN" --arg webCertificateName "$WEB_CERT" \
   --argjson approvedClientIds "$approved" '{
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
     contentVersion: "1.0.0.0",
@@ -84,7 +106,8 @@ WEB_CLIENT_SECRET="$BLOG_WEB_CLIENT_SECRET" jq -n \
       ownerObjectId: {value: $ownerObjectId},
       webClientId: {value: $webClientId}, webClientSecret: {value: $ENV.WEB_CLIENT_SECRET},
       studioApiClientId: {value: $studioApiClientId}, blogApiClientId: {value: $blogApiClientId},
-      approvedClientIds: {value: $approvedClientIds}
+      approvedClientIds: {value: $approvedClientIds},
+      webCustomDomain: {value: $webCustomDomain}, webCertificateName: {value: $webCertificateName}
     }}' >"$params"
 
 echo "Deploying image tag $SHA to resource group $RG..."

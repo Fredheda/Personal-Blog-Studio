@@ -11,6 +11,11 @@ without touching it:
 - FAKE_BLOB_SD / FAKE_CONTAINER_SD: `true` or `false` printed for the two soft-delete queries.
 - FAKE_POLICY: JSON printed for `az storage account management-policy show`;
   when unset the command exits 1 (no policy yet).
+- FAKE_CUSTOM_DOMAINS: comma list of custom domains the web app has bound;
+  FAKE_BINDING: bindingType printed by `az containerapp hostname list` (default
+  SniEnabled); FAKE_CERT_STATES: see the certificate case.
+- FAKE_GDDY_RECORDS / FAKE_GDDY_IGNORE_ADD and FAKE_DIG_CNAME / FAKE_DIG_TXT: see
+  FAKE_GDDY and FAKE_DIG.
 
 For `az deployment group create` the fake copies the `--parameters @file` it
 was given (content and permissions) to `$FAKE_LOG.params` and `$FAKE_LOG.mode`
@@ -140,7 +145,24 @@ case "$*" in
   "rest --method PATCH"*|"rest --method POST"*) exit 0 ;;
   "containerapp show"*)
     if [ -n "${FAKE_NO_WEB_APP:-}" ]; then exit 1; fi
-    echo "app.example.test"; exit 0 ;;
+    case "$*" in
+      *customDomainVerificationId*) echo "verify-123" ;;
+      *customDomains*) printf '%s\n' "${FAKE_CUSTOM_DOMAINS:-}" | tr ',' '\n' | grep . || true ;;
+      *) echo "app.example.test" ;;
+    esac
+    exit 0 ;;
+  "containerapp hostname list"*)
+    echo "${FAKE_BINDING:-SniEnabled}"; exit 0 ;;
+  "containerapp env certificate list"*)
+    # FAKE_CERT_STATES: comma list of provisioning states returned by successive
+    # calls (the last one repeats); "none" = no certificate yet. Default: Succeeded.
+    st="$FAKE_LOG.state"; mkdir -p "$st"
+    n=$(cat "$st/certcalls" 2>/dev/null || echo 0); echo $((n+1)) > "$st/certcalls"
+    IFS=',' read -r -a states <<<"${FAKE_CERT_STATES:-Succeeded}"
+    i=$n; [ "$i" -ge "${#states[@]}" ] && i=$((${#states[@]}-1))
+    s=${states[$i]}
+    if [ "$s" = none ]; then echo '[]'; else echo "[{\"name\":\"mc-cae-blogstudio-blog-studio-1234\",\"state\":\"$s\"}]"; fi
+    exit 0 ;;
 esac
 exit 0
 """

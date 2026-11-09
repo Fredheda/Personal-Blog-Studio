@@ -63,6 +63,12 @@ param blogApiClientId string
 @minLength(1)
 param approvedClientIds array
 
+@description('Custom hostname of the studio web app. Empty means the default hostname only. When set, webCertificateName must name its managed certificate.')
+param webCustomDomain string = ''
+
+@description('Name of the managed certificate bound to webCustomDomain in the environment (created by scripts/bind-domain.sh).')
+param webCertificateName string = ''
+
 // Built-in AcrPull role definition ID (constant across all tenants).
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var loginServer = '${acrName}.azurecr.io'
@@ -136,9 +142,16 @@ resource web 'Microsoft.App/containerApps@2025-01-01' = {
         external: true
         targetPort: 3000
         transport: 'auto'
-        // ARM's PUT treats the whole ingress object as authoritative. When a
-        // custom domain is bound (blog-studio.frederikheda.com), declare
-        // customDomains here in the same change, or the next deploy wipes it.
+        // ARM's PUT treats the whole ingress object as authoritative, so the
+        // custom domain is declared here and every deploy keeps the binding.
+        // deploy.sh refuses a deploy that would drop a domain bound today.
+        customDomains: empty(webCustomDomain) ? [] : [
+          {
+            name: webCustomDomain
+            bindingType: 'SniEnabled'
+            certificateId: '${appEnvironment.id}/managedCertificates/${webCertificateName}'
+          }
+        ]
       }
       registries: [
         {
