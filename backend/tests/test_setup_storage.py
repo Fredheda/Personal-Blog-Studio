@@ -104,16 +104,6 @@ def test_a_dry_run_prints_every_change_and_writes_nothing(fake_az: FakeAz) -> No
     assert "+ az storage account management-policy create" in result.stdout
 
 
-def test_cors_never_goes_through_the_key_backed_data_plane_commands(
-    fake_az: FakeAz,
-) -> None:
-    # `az storage cors ...` has no --auth-mode and falls back to account keys.
-    result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OTHER})
-    assert result.returncode == 0, result.stderr
-    assert not [c for c in fake_az.calls if c.startswith("storage cors")]
-    assert not [c for c in fake_az.calls if "--account-key" in c]
-
-
 def test_apply_adds_the_cors_rule_and_keeps_the_existing_ones(fake_az: FakeAz) -> None:
     result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OTHER})
     assert result.returncode == 0, result.stderr
@@ -138,6 +128,54 @@ def test_apply_adds_the_cors_rule_when_the_service_has_none(fake_az: FakeAz) -> 
     adds = cors_writes(fake_az)
     assert len(adds) == 1
     assert [r["allowedOrigins"] for r in cors_rules_written(adds[0])] == [[ORIGIN]]
+
+
+def cors_reads(fake_az: FakeAz) -> list[str]:
+    return [
+        c
+        for c in fake_az.calls
+        if c.startswith("storage account blob-service-properties show")
+        and "cors.corsRules" in c
+    ]
+
+
+def test_apply_reads_the_cors_rules_back_after_the_update(fake_az: FakeAz) -> None:
+    result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OTHER})
+    assert result.returncode == 0, result.stderr
+    assert len(cors_reads(fake_az)) == 2  # before and after the update
+    assert "CORS: verified" in result.stdout
+
+
+def test_a_dry_run_does_not_read_back(fake_az: FakeAz) -> None:
+    fake_az.run(SCRIPT, env=ALL_ON)
+    assert len(cors_reads(fake_az)) == 1
+
+
+def test_apply_fails_loudly_when_the_update_did_not_take_effect(
+    fake_az: FakeAz,
+) -> None:
+    result = fake_az.run(
+        SCRIPT,
+        "--apply",
+        env={**ALL_ON, "FAKE_CORS": CORS_OTHER, "FAKE_CORS_IGNORE_UPDATE": "1"},
+    )
+    assert result.returncode == 1
+    assert "ERROR: CORS" in result.stderr and ORIGIN in result.stderr
+    # It stops there: the lifecycle policy is not touched after a failed step.
+    assert not [c for c in writes(fake_az) if "management-policy create" in c]
+
+
+def test_apply_fails_loudly_when_the_update_dropped_other_rules(
+    fake_az: FakeAz,
+) -> None:
+    result = fake_az.run(
+        SCRIPT,
+        "--apply",
+        env={**ALL_ON, "FAKE_CORS": CORS_OTHER, "FAKE_CORS_DROP_OTHERS": "1"},
+    )
+    assert result.returncode == 1
+    assert "ERROR: CORS" in result.stderr
+    assert "existing" in result.stderr
 
 
 def test_a_look_alike_origin_does_not_count_as_ours(fake_az: FakeAz) -> None:

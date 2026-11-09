@@ -33,12 +33,18 @@ echo "Storage account: $ACCOUNT ($SA_RG). Mode: $([ "$APPLY" -eq 1 ] && echo APP
 # Through the management API (blob-service-properties), not `az storage cors`:
 # those data-plane commands take no --auth-mode and fall back to account keys.
 # The API returns null when a service never had rules.
-cors=$(az storage account blob-service-properties show -n "$ACCOUNT" -g "$SA_RG" \
-  --query "cors.corsRules" -o json)
+read_cors() {
+  az storage account blob-service-properties show -n "$ACCOUNT" -g "$SA_RG" \
+    --query "cors.corsRules" -o json
+}
 # Exact match against each rule's origin list: a look-alike such as
 # "<origin>.example.test" must not count as ours.
-if jq -e --arg o "$ORIGIN" '
-  any((. // [])[]; ((.allowedOrigins // []) | map(gsub("^\\s+|\\s+$"; ""))) | index($o) != null)' <<<"$cors" >/dev/null; then
+has_origin() {
+  jq -e --arg o "$ORIGIN" '
+    any((. // [])[]; ((.allowedOrigins // []) | map(gsub("^\\s+|\\s+$"; ""))) | index($o) != null)' >/dev/null
+}
+cors=$(read_cors)
+if has_origin <<<"$cors"; then
   echo "CORS: $ORIGIN already allowed."
 else
   # The update replaces the whole rule list, so send the existing rules plus ours.
@@ -50,6 +56,22 @@ else
   echo "CORS: keeping $(jq '(. // []) | length' <<<"$cors") existing rule(s), adding $ORIGIN."
   run az storage account blob-service-properties update -n "$ACCOUNT" -g "$SA_RG" \
     --set "cors.corsRules=$merged"
+  if [ "$APPLY" -eq 1 ]; then
+    # A successful call is not proof: read the rules back. Our origin must be
+    # there, and no existing rule may have been lost.
+    after=$(read_cors)
+    before_count=$(jq '(. // []) | length' <<<"$cors")
+    after_count=$(jq '(. // []) | length' <<<"$after")
+    if ! has_origin <<<"$after"; then
+      echo "ERROR: CORS rule for $ORIGIN is missing after the update; stopping." >&2
+      exit 1
+    fi
+    if [ "$after_count" -lt $((before_count + 1)) ]; then
+      echo "ERROR: CORS has $after_count rule(s) after the update, expected at least $((before_count + 1)): an existing rule was lost; stopping." >&2
+      exit 1
+    fi
+    echo "CORS: verified $ORIGIN is allowed ($after_count rule(s))."
+  fi
 fi
 
 # 2. Soft delete ------------------------------------------------------------

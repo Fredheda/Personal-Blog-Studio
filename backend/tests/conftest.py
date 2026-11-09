@@ -40,9 +40,19 @@ case "$*" in
   "storage cors"*)
     # The data-plane commands take no --auth-mode and fall back to account keys.
     echo "ERROR: unrecognized arguments: --auth-mode login" >&2; exit 2 ;;
+  "storage account blob-service-properties update"*cors.corsRules=*)
+    # Keep what was written so the read-back sees it. FAKE_CORS_IGNORE_UPDATE:
+    # the write succeeds but changes nothing. FAKE_CORS_DROP_OTHERS: only the
+    # last rule survives.
+    all="$*"
+    json=${all#*cors.corsRules=}
+    if [ -n "${FAKE_CORS_IGNORE_UPDATE:-}" ]; then exit 0; fi
+    if [ -n "${FAKE_CORS_DROP_OTHERS:-}" ]; then json=$(echo "$json" | jq -c '[.[-1]]'); fi
+    echo "$json" > "$FAKE_LOG.cors"; exit 0 ;;
   "storage account blob-service-properties show"*)
     case "$*" in
-      *cors.corsRules*) echo "${FAKE_CORS:-[]}" ;;
+      *cors.corsRules*)
+        if [ -f "$FAKE_LOG.cors" ]; then cat "$FAKE_LOG.cors"; else echo "${FAKE_CORS:-[]}"; fi ;;
       *containerDeleteRetentionPolicy*) echo "${FAKE_CONTAINER_SD:-false}" ;;
       *) echo "${FAKE_BLOB_SD:-false}" ;;
     esac
