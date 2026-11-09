@@ -49,6 +49,42 @@ def test_ensure_app_stops_when_the_name_is_ambiguous(
     assert not [c for c in fake_az.calls if c.startswith("ad app create")]
 
 
+def test_a_name_that_prefixes_other_apps_is_looked_up_exactly(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # `--display-name blogapi` also matches blogapi-gate-caller and
+    # blogapi-gate-denied; the lookup must still find exactly `blogapi`.
+    result = lib(
+        fake_az,
+        tmp_path,
+        "ensure_app blogapi-gate-caller; ensure_app blogapi-gate-denied; "
+        "ensure_app blogapi; ensure_app blogapi",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == [
+        "appid-blogapi-gate-caller",
+        "appid-blogapi-gate-denied",
+        "appid-blogapi",
+        "appid-blogapi",
+    ]
+    creates = [c for c in fake_az.calls if c.startswith("ad app create")]
+    assert len(creates) == 3
+
+
+def test_a_name_that_only_prefixes_other_apps_is_not_found(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # With only blogapi-gate-caller present, `blogapi` does not exist: the
+    # lookup must not hand back the other app's client ID.
+    result = lib(
+        fake_az,
+        tmp_path,
+        'ensure_app blogapi-gate-caller >/dev/null; echo "[$(app_id blogapi)]"',
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]"
+
+
 def test_approve_client_assigns_the_role_once(fake_az: FakeAz, tmp_path: Path) -> None:
     prepare = "ensure_app blogapi >/dev/null; "
     first = lib(fake_az, tmp_path, prepare + "approve_client caller-sp")
