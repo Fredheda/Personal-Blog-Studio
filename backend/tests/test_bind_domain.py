@@ -201,6 +201,27 @@ def test_bind_writes_nothing_when_the_binding_is_not_sni(
     assert env_text(tmp_path) == ""
 
 
+def test_a_half_done_bind_is_finished_not_skipped(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # The hostname was added but the bind failed: it is listed with another
+    # binding type. A re-run must run the bind (not add the host again).
+    result = run(
+        fake_az,
+        tmp_path,
+        "bind",
+        "--apply",
+        FAKE_CUSTOM_DOMAINS=HOST,
+        FAKE_SNI_DOMAINS="",
+        **READY,
+    )
+    assert result.returncode == 0, result.stderr
+    (only,) = writes(fake_az)
+    assert only.startswith("containerapp hostname bind")
+    assert "already bound" not in result.stdout
+    assert f"BLOG_WEB_CERTIFICATE_NAME={CERT}" in env_text(tmp_path)
+
+
 def test_a_second_bind_changes_nothing_in_azure(
     fake_az: FakeAz, tmp_path: Path
 ) -> None:

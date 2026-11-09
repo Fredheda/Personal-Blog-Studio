@@ -187,6 +187,24 @@ def test_a_deploy_that_would_unbind_the_live_domain_is_refused(
     assert deployments(fake_az) == []
 
 
+def test_the_guard_fails_closed_when_azure_cannot_be_read(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # An auth or network error must not look like "nothing is bound".
+    result = fake_az.run(SCRIPT, SHA, env={**env(tmp_path), "FAKE_LIST_FAILS": "1"})
+    assert result.returncode != 0
+    assert "AuthorizationFailed" in result.stderr
+    assert deployments(fake_az) == []
+
+
+def test_the_first_deploy_has_nothing_to_unbind(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    result = fake_az.run(SCRIPT, SHA, env={**env(tmp_path), "FAKE_NO_WEB_APP": "1"})
+    assert result.returncode == 0, result.stderr
+    assert len(deployments(fake_az)) == 1
+
+
 def test_a_deploy_that_would_replace_the_live_domain_is_refused(
     fake_az: FakeAz, tmp_path: Path
 ) -> None:

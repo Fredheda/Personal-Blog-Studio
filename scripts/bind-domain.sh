@@ -132,7 +132,7 @@ phase_dns() {
 dig_values() { dig +short "$1" "$2" | tr -d '"' | sed 's/\.$//'; }
 
 phase_bind() {
-  local cname txts ready=1 bound certs state name="" binding i
+  local cname txts ready=1 listed bound certs state name="" binding i
   cname=$(dig_values CNAME "$HOST" | head -1)
   if [ "$(norm "$cname")" != "$(norm "$FQDN")" ]; then
     echo "DNS not ready: CNAME $HOST is '${cname:-none}', expected $FQDN. Run bind-domain.sh dns, then wait for DNS." >&2
@@ -145,12 +145,20 @@ phase_bind() {
   fi
   [ "$ready" -eq 1 ] || exit 1
 
-  bound=$(az containerapp show -n "$WEB_APP" -g "$RG" \
+  # A host that was added but never bound (an earlier run stopped between the two
+  # calls) is listed without an SNI binding: finish the bind, do not skip it.
+  listed=$(az containerapp show -n "$WEB_APP" -g "$RG" \
     --query "properties.configuration.ingress.customDomains[].name" -o tsv)
+  bound=$(az containerapp show -n "$WEB_APP" -g "$RG" \
+    --query "properties.configuration.ingress.customDomains[?bindingType=='SniEnabled'].name" -o tsv)
   if grep -qxF -- "$HOST" <<<"$bound"; then
     echo "$HOST is already bound to $WEB_APP."
   else
-    run az containerapp hostname add --hostname "$HOST" -g "$RG" -n "$WEB_APP" -o none
+    if grep -qxF -- "$HOST" <<<"$listed"; then
+      echo "$HOST was added to $WEB_APP but not bound yet; finishing the bind."
+    else
+      run az containerapp hostname add --hostname "$HOST" -g "$RG" -n "$WEB_APP" -o none
+    fi
     run az containerapp hostname bind --hostname "$HOST" -g "$RG" -n "$WEB_APP" \
       --environment "$ENVIRONMENT" --validation-method CNAME -o none
   fi

@@ -147,9 +147,17 @@ case "$*" in
     if [ -n "${FAKE_NO_WEB_APP:-}" ]; then exit 1; fi
     case "$*" in
       *customDomainVerificationId*) echo "verify-123" ;;
+      # Domains whose binding is SniEnabled default to all of FAKE_CUSTOM_DOMAINS;
+      # FAKE_SNI_DOMAINS (even empty) overrides, to model a half-done bind.
+      *bindingType*) printf '%s\n' "${FAKE_SNI_DOMAINS-${FAKE_CUSTOM_DOMAINS:-}}" | tr ',' '\n' | grep . || true ;;
       *customDomains*) printf '%s\n' "${FAKE_CUSTOM_DOMAINS:-}" | tr ',' '\n' | grep . || true ;;
       *) echo "app.example.test" ;;
     esac
+    exit 0 ;;
+  "containerapp list"*)
+    # FAKE_LIST_FAILS: the call fails (auth, network); FAKE_NO_WEB_APP: no apps.
+    if [ -n "${FAKE_LIST_FAILS:-}" ]; then echo "ERROR: (AuthorizationFailed) simulated" >&2; exit 1; fi
+    if [ -n "${FAKE_NO_WEB_APP:-}" ]; then echo 0; else echo 1; fi
     exit 0 ;;
   "containerapp hostname list"*)
     echo "${FAKE_BINDING:-SniEnabled}"; exit 0 ;;

@@ -76,9 +76,14 @@ done
 
 # ARM's PUT treats the web app's ingress as authoritative: a deploy that does not
 # declare the domain bound today would silently unbind it. Stop instead. On the
-# first deploy the app does not exist yet and nothing is bound.
-bound=$(az containerapp show -n ca-blogstudio-web -g "$RG" \
-  --query "properties.configuration.ingress.customDomains[].name" -o tsv 2>/dev/null || true)
+# first deploy the app does not exist yet and nothing is bound. Any az failure
+# (auth, network) aborts the script: it must never look like "nothing is bound".
+bound=""
+app_count=$(az containerapp list -g "$RG" --query "[?name=='ca-blogstudio-web'] | length(@)" -o tsv)
+if [ "$app_count" != 0 ]; then
+  bound=$(az containerapp show -n ca-blogstudio-web -g "$RG" \
+    --query "properties.configuration.ingress.customDomains[].name" -o tsv)
+fi
 for name in $bound; do
   if [ "$name" != "$WEB_DOMAIN" ]; then
     echo "ERROR: ca-blogstudio-web has the custom domain '$name' bound, but this deploy would drop it. Set BLOG_WEB_CUSTOM_DOMAIN and BLOG_WEB_CERTIFICATE_NAME in $ENV_FILE (scripts/bind-domain.sh writes them)." >&2
