@@ -57,15 +57,26 @@ case "$*" in
   "account show"*) echo "tenant-1"; exit 0 ;;
   "ad signed-in-user show"*) echo "owner-oid"; exit 0 ;;
   "ad app list"*)
-    name=$(echo "$*" | sed -E 's/.*--display-name ([^ ]+).*/\1/')
-    st="$FAKE_LOG.state/app-$name"
+    # Like the live service: --display-name matches names that START with the
+    # value; --filter "displayName eq 'x'" matches the exact name only.
+    st="$FAKE_LOG.state"
+    case "$*" in
+      *"--filter"*)
+        name=$(echo "$*" | sed -E "s/.*displayName eq '([^']+)'.*/\1/")
+        matches=$(ls "$st" 2>/dev/null | grep -x "app-$name" || true) ;;
+      *)
+        name=$(echo "$*" | sed -E 's/.*--display-name ([^ ]+).*/\1/')
+        matches=$(ls "$st" 2>/dev/null | grep "^app-$name" || true) ;;
+    esac
     case "$*" in
       *"length(@)"*)
         case ",${FAKE_DUP_APPS:-}," in
           *",$name,"*) echo 2 ;;
-          *) if [ -f "$st" ]; then echo 1; else echo 0; fi ;;
+          *) printf '%s\n' "$matches" | grep -c . ;;
         esac ;;
-      *) if [ -f "$st" ]; then cat "$st"; fi ;;
+      *)
+        first=$(printf '%s\n' "$matches" | head -1)
+        if [ -n "$first" ]; then cat "$st/$first"; fi ;;
     esac
     exit 0 ;;
   "ad app create"*)

@@ -31,16 +31,18 @@ get_env() {
   { grep -E "^$1=" "$ENV_FILE" 2>/dev/null || true; } | tail -1 | cut -d= -f2-
 }
 
-# Client ID of the app registration with this display name; empty if there is
-# none. Fails if the name is ambiguous, so a script never writes to the wrong app.
+# Client ID of the app registration with this exact display name; empty if there
+# is none. Fails if the name is ambiguous, so a script never writes to the wrong
+# app. The lookup is an exact OData filter: `--display-name` matches every name
+# that merely STARTS with the value (blogapi would match blogapi-gate-caller).
 app_id() {
-  local count
-  count=$(az ad app list --display-name "$1" --query "length(@)" -o tsv)
+  local count filter="displayName eq '$1'"
+  count=$(az ad app list --filter "$filter" --query "length(@)" -o tsv)
   if [ "$count" -gt 1 ]; then
     echo "ERROR: $count app registrations are named '$1'; delete the extras first." >&2
     return 1
   fi
-  az ad app list --display-name "$1" --query "[0].appId" -o tsv
+  az ad app list --filter "$filter" --query "[0].appId" -o tsv
 }
 
 # Create the app registration if it does not exist; print its client ID.
