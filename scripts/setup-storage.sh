@@ -30,16 +30,26 @@ run() {
 echo "Storage account: $ACCOUNT ($SA_RG). Mode: $([ "$APPLY" -eq 1 ] && echo APPLY || echo dry run)"
 
 # 1. CORS -------------------------------------------------------------------
-cors=$(az storage cors list --services b --account-name "$ACCOUNT" --auth-mode login -o json)
-# Exact match against the comma-separated origin list: a look-alike such as
+# Through the management API (blob-service-properties), not `az storage cors`:
+# those data-plane commands take no --auth-mode and fall back to account keys.
+# The API returns null when a service never had rules.
+cors=$(az storage account blob-service-properties show -n "$ACCOUNT" -g "$SA_RG" \
+  --query "cors.corsRules" -o json)
+# Exact match against each rule's origin list: a look-alike such as
 # "<origin>.example.test" must not count as ours.
 if jq -e --arg o "$ORIGIN" '
-  any(.[]; (.AllowedOrigins | tostring | split(",") | map(gsub("^\\s+|\\s+$"; ""))) | index($o) != null)' <<<"$cors" >/dev/null; then
+  any((. // [])[]; ((.allowedOrigins // []) | map(gsub("^\\s+|\\s+$"; ""))) | index($o) != null)' <<<"$cors" >/dev/null; then
   echo "CORS: $ORIGIN already allowed."
 else
-  run az storage cors add --services b --methods OPTIONS PUT --origins "$ORIGIN" \
-    --allowed-headers "x-ms-*" "content-type" --exposed-headers "x-ms-*" \
-    --max-age 3600 --account-name "$ACCOUNT" --auth-mode login
+  # The update replaces the whole rule list, so send the existing rules plus ours.
+  rule=$(jq -n --arg o "$ORIGIN" '{
+    allowedOrigins: [$o], allowedMethods: ["OPTIONS", "PUT"],
+    allowedHeaders: ["x-ms-*", "content-type"], exposedHeaders: ["x-ms-*"],
+    maxAgeInSeconds: 3600}')
+  merged=$(jq -c --argjson rule "$rule" '(. // []) + [$rule]' <<<"$cors")
+  echo "CORS: keeping $(jq '(. // []) | length' <<<"$cors") existing rule(s), adding $ORIGIN."
+  run az storage account blob-service-properties update -n "$ACCOUNT" -g "$SA_RG" \
+    --set "cors.corsRules=$merged"
 fi
 
 # 2. Soft delete ------------------------------------------------------------

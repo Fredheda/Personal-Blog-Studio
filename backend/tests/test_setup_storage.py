@@ -55,81 +55,115 @@ OUR_RULE_AS_RETURNED = {
         },
     },
 }
-CORS_OTHER = json.dumps(
+# CORS rules in the shape the management API returns (arrays, camelCase).
+OTHER_CORS_RULE = {
+    "allowedOrigins": ["https://example.test"],
+    "allowedMethods": ["GET"],
+    "allowedHeaders": ["*"],
+    "exposedHeaders": ["*"],
+    "maxAgeInSeconds": 60,
+}
+CORS_OTHER = json.dumps([OTHER_CORS_RULE])
+CORS_OURS = json.dumps(
     [
         {
-            "Service": "blob",
-            "AllowedOrigins": "https://example.test",
-            "AllowedMethods": "GET",
+            "allowedOrigins": [ORIGIN],
+            "allowedMethods": ["OPTIONS", "PUT"],
+            "allowedHeaders": ["x-ms-*", "content-type"],
+            "exposedHeaders": ["x-ms-*"],
+            "maxAgeInSeconds": 3600,
         }
     ]
-)
-CORS_OURS = json.dumps(
-    [{"Service": "blob", "AllowedOrigins": ORIGIN, "AllowedMethods": "OPTIONS,PUT"}]
 )
 ALL_ON = {"FAKE_BLOB_SD": "true", "FAKE_CONTAINER_SD": "true"}
 
 
 def writes(fake_az: FakeAz) -> list[str]:
     prefixes = (
-        "storage cors add",
         "storage account blob-service-properties update",
         "storage account management-policy create",
     )
     return [c for c in fake_az.calls if c.startswith(prefixes)]
 
 
+def cors_writes(fake_az: FakeAz) -> list[str]:
+    return [c for c in writes(fake_az) if "cors.corsRules=" in c]
+
+
+def cors_rules_written(call: str) -> list[dict]:
+    return json.loads(call.split("cors.corsRules=", 1)[1])
+
+
 def test_a_dry_run_prints_every_change_and_writes_nothing(fake_az: FakeAz) -> None:
     result = fake_az.run(SCRIPT)
     assert result.returncode == 0, result.stderr
     assert writes(fake_az) == []
-    assert "+ az storage cors add" in result.stdout
     assert "+ az storage account blob-service-properties update" in result.stdout
+    assert "cors.corsRules=" in result.stdout
+    assert "--enable-delete-retention" in result.stdout
     assert "+ az storage account management-policy create" in result.stdout
 
 
-def test_apply_adds_the_cors_rule_when_the_origin_is_missing(fake_az: FakeAz) -> None:
+def test_cors_never_goes_through_the_key_backed_data_plane_commands(
+    fake_az: FakeAz,
+) -> None:
+    # `az storage cors ...` has no --auth-mode and falls back to account keys.
     result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OTHER})
     assert result.returncode == 0, result.stderr
-    adds = [c for c in writes(fake_az) if c.startswith("storage cors add")]
+    assert not [c for c in fake_az.calls if c.startswith("storage cors")]
+    assert not [c for c in fake_az.calls if "--account-key" in c]
+
+
+def test_apply_adds_the_cors_rule_and_keeps_the_existing_ones(fake_az: FakeAz) -> None:
+    result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OTHER})
+    assert result.returncode == 0, result.stderr
+    adds = cors_writes(fake_az)
     assert len(adds) == 1
-    assert f"--origins {ORIGIN}" in adds[0]
-    assert "--methods OPTIONS PUT" in adds[0]
+    rules = cors_rules_written(adds[0])
+    assert rules[0] == OTHER_CORS_RULE  # another project's rule is untouched
+    assert rules[1] == {
+        "allowedOrigins": [ORIGIN],
+        "allowedMethods": ["OPTIONS", "PUT"],
+        "allowedHeaders": ["x-ms-*", "content-type"],
+        "exposedHeaders": ["x-ms-*"],
+        "maxAgeInSeconds": 3600,
+    }
+    assert len(rules) == 2
+
+
+def test_apply_adds_the_cors_rule_when_the_service_has_none(fake_az: FakeAz) -> None:
+    # The management API returns null (not []) for a service that never had rules.
+    result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": "null"})
+    assert result.returncode == 0, result.stderr
+    adds = cors_writes(fake_az)
+    assert len(adds) == 1
+    assert [r["allowedOrigins"] for r in cors_rules_written(adds[0])] == [[ORIGIN]]
 
 
 def test_a_look_alike_origin_does_not_count_as_ours(fake_az: FakeAz) -> None:
     lookalike = json.dumps(
-        [
-            {
-                "Service": "blob",
-                "AllowedOrigins": f"{ORIGIN}.example.test,https://other.test",
-                "AllowedMethods": "OPTIONS,PUT",
-            }
-        ]
+        [{**OTHER_CORS_RULE, "allowedOrigins": [f"{ORIGIN}.example.test"]}]
     )
     fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": lookalike})
-    adds = [c for c in writes(fake_az) if c.startswith("storage cors add")]
-    assert len(adds) == 1
+    assert len(cors_writes(fake_az)) == 1
 
 
-def test_the_origin_is_found_among_several_in_one_rule(fake_az: FakeAz) -> None:
+def test_the_origin_is_found_among_several_rules_and_origins(fake_az: FakeAz) -> None:
     several = json.dumps(
         [
-            {
-                "Service": "blob",
-                "AllowedOrigins": f"https://a.test, {ORIGIN} ,https://b.test",
-                "AllowedMethods": "OPTIONS,PUT",
-            }
+            OTHER_CORS_RULE,
+            {**OTHER_CORS_RULE, "allowedOrigins": ["https://a.test", ORIGIN]},
         ]
     )
     fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": several})
-    assert not [c for c in writes(fake_az) if c.startswith("storage cors add")]
+    assert cors_writes(fake_az) == []
 
 
 def test_the_cors_rule_is_not_added_twice(fake_az: FakeAz) -> None:
     result = fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OURS})
     assert result.returncode == 0, result.stderr
-    assert not [c for c in writes(fake_az) if c.startswith("storage cors add")]
+    assert cors_writes(fake_az) == []
+    assert "already allowed" in result.stdout
 
 
 def test_soft_delete_is_enabled_only_where_it_is_off(fake_az: FakeAz) -> None:
@@ -143,7 +177,7 @@ def test_soft_delete_is_enabled_only_where_it_is_off(fake_az: FakeAz) -> None:
         },
     )
     assert result.returncode == 0, result.stderr
-    updates = [c for c in writes(fake_az) if "blob-service-properties update" in c]
+    updates = [c for c in writes(fake_az) if "--enable-" in c]
     assert len(updates) == 1
     assert "--enable-container-delete-retention true" in updates[0]
     assert "--container-delete-retention-days 14" in updates[0]
@@ -155,7 +189,7 @@ def test_soft_delete_is_enabled_only_where_it_is_off(fake_az: FakeAz) -> None:
 
 def test_soft_delete_is_left_alone_when_both_are_on(fake_az: FakeAz) -> None:
     fake_az.run(SCRIPT, "--apply", env={**ALL_ON, "FAKE_CORS": CORS_OURS})
-    assert not [c for c in writes(fake_az) if "blob-service-properties update" in c]
+    assert not [c for c in writes(fake_az) if "--enable-" in c]
 
 
 def policy_arg(call: str) -> dict:
