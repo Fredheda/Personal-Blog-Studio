@@ -11,7 +11,8 @@
 #
 # Settings come from the git-ignored .env (names in .env.example), written by the
 # Entra setup scripts. The Easy Auth client secret is read from
-# BLOG_WEB_CLIENT_SECRET or prompted for; it is never stored in a file here.
+# BLOG_WEB_CLIENT_SECRET in .env (written with mode 600 by setup-easyauth.sh) or
+# prompted for when unset; it is never passed on a command line.
 #
 # Usage: ./infra/deploy.sh <full-commit-sha>
 set -euo pipefail

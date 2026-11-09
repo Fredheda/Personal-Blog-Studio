@@ -19,11 +19,16 @@ Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) b
 | Build images (ACR Tasks) | `./scripts/build-push.sh [full-sha]` |
 | Shared storage setup (dry run; `--apply` changes the shared account) | `./scripts/setup-storage.sh [--apply]` |
 | Provision or update Azure (needs built images and `.env`) | `./infra/deploy.sh <full-sha>` |
+| Entra apps for the two APIs, `Blog.Read`, gate callers (dry run; `--apply` writes to Entra) | `./scripts/setup-api-auth.sh [--apply]` |
+| Entra login app, owner assignment, client secret (`--rotate` replaces the secret) | `./scripts/setup-easyauth.sh [--apply] [--rotate]` |
+| Approve one more read API caller by client ID | `./scripts/approve-client.sh <client-id> [--apply]` |
+| Three-step live gate (adds then removes temporary credentials) | `./scripts/live-gate.sh [--run]` |
 | Compile the Bicep (local, no login) | `az bicep build --file infra/main.bicep --stdout >/dev/null` |
 
 - Script tests use a fake `az` (`backend/tests/conftest.py`); the Bicep is checked structurally (`backend/tests/test_infra_bicep.py`). Check shell scripts with `shellcheck -x -P SCRIPTDIR`.
 - The read API identity has no role on `blog-drafts` and no write role anywhere; `approvedClientIds` cannot be empty; no auth config is conditional. Tests pin all three.
-- `deploy.sh` needs the Entra IDs and the owner's object ID in the git-ignored `.env` (names in `.env.example`; the IDs come from the BLOG-15 setup scripts) and an explicit full SHA whose images exist. The Easy Auth secret goes to `az` only through a mode-600 temporary file, never through a command line (`az` or `jq`).
+- `deploy.sh` reads the git-ignored `.env` (names in `.env.example`; the Entra scripts write the IDs and the Easy Auth secret) and needs an explicit full SHA whose images exist. Secrets reach `az`, `curl` and `jq` only through mode-600 temporary files or the environment, never through arguments.
+- The Entra scripts are dry runs unless given `--apply` (`--run` for the gate) and re-apply every property on each run. Run them only on the owner's explicit yes for that run.
 
 ## Commands
 
