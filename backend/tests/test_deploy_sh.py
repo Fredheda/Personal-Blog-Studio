@@ -124,3 +124,102 @@ def test_the_secret_travels_in_a_private_temporary_file_only(
     assert params["webClientSecret"]["value"] == "s3cret-value"
     assert fake_az.side_file("mode") == "-rw-------"
     assert not Path(fake_az.side_file("paramfile")).exists()
+
+
+DOMAIN = "blog-studio.frederikheda.com"
+CERT = "mc-cae-blogstudio-blog-studio-1234"
+
+
+def test_without_a_custom_domain_both_parameters_are_empty(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    result = fake_az.run(SCRIPT, SHA, env=env(tmp_path))
+    assert result.returncode == 0, result.stderr
+    params = json.loads(fake_az.side_file("params"))["parameters"]
+    assert params["webCustomDomain"]["value"] == ""
+    assert params["webCertificateName"]["value"] == ""
+
+
+def test_the_custom_domain_and_certificate_travel_as_parameters(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    result = fake_az.run(
+        SCRIPT,
+        SHA,
+        env={
+            **env(
+                tmp_path,
+                BLOG_WEB_CUSTOM_DOMAIN=DOMAIN,
+                BLOG_WEB_CERTIFICATE_NAME=CERT,
+            ),
+            "FAKE_CUSTOM_DOMAINS": DOMAIN,
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    params = json.loads(fake_az.side_file("params"))["parameters"]
+    assert params["webCustomDomain"]["value"] == DOMAIN
+    assert params["webCertificateName"]["value"] == CERT
+
+
+def test_half_a_domain_setting_is_refused_before_azure(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    for only in (
+        {"BLOG_WEB_CUSTOM_DOMAIN": DOMAIN},
+        {"BLOG_WEB_CERTIFICATE_NAME": CERT},
+    ):
+        result = fake_az.run(SCRIPT, SHA, env=env(tmp_path, **only))
+        assert result.returncode == 2, only
+        assert "together" in result.stderr
+    assert fake_az.calls == []
+
+
+def test_a_deploy_that_would_unbind_the_live_domain_is_refused(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # ARM's PUT treats the ingress as authoritative: deploying without the
+    # domain settings while one is bound would silently remove the binding.
+    result = fake_az.run(
+        SCRIPT, SHA, env={**env(tmp_path), "FAKE_CUSTOM_DOMAINS": DOMAIN}
+    )
+    assert result.returncode == 1
+    assert DOMAIN in result.stderr and "bind-domain.sh" in result.stderr
+    assert deployments(fake_az) == []
+
+
+def test_the_guard_fails_closed_when_azure_cannot_be_read(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # An auth or network error must not look like "nothing is bound".
+    result = fake_az.run(SCRIPT, SHA, env={**env(tmp_path), "FAKE_LIST_FAILS": "1"})
+    assert result.returncode != 0
+    assert "AuthorizationFailed" in result.stderr
+    assert deployments(fake_az) == []
+
+
+def test_the_first_deploy_has_nothing_to_unbind(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    result = fake_az.run(SCRIPT, SHA, env={**env(tmp_path), "FAKE_NO_WEB_APP": "1"})
+    assert result.returncode == 0, result.stderr
+    assert len(deployments(fake_az)) == 1
+
+
+def test_a_deploy_that_would_replace_the_live_domain_is_refused(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    result = fake_az.run(
+        SCRIPT,
+        SHA,
+        env={
+            **env(
+                tmp_path,
+                BLOG_WEB_CUSTOM_DOMAIN=DOMAIN,
+                BLOG_WEB_CERTIFICATE_NAME=CERT,
+            ),
+            "FAKE_CUSTOM_DOMAINS": "other.example.test",
+        },
+    )
+    assert result.returncode == 1
+    assert "other.example.test" in result.stderr
+    assert deployments(fake_az) == []

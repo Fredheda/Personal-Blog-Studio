@@ -11,6 +11,11 @@ without touching it:
 - FAKE_BLOB_SD / FAKE_CONTAINER_SD: `true` or `false` printed for the two soft-delete queries.
 - FAKE_POLICY: JSON printed for `az storage account management-policy show`;
   when unset the command exits 1 (no policy yet).
+- FAKE_CUSTOM_DOMAINS: comma list of custom domains the web app has bound;
+  FAKE_BINDING: bindingType printed by `az containerapp hostname list` (default
+  SniEnabled); FAKE_CERT_STATES: see the certificate case.
+- FAKE_GDDY_RECORDS / FAKE_GDDY_IGNORE_ADD and FAKE_DIG_CNAME / FAKE_DIG_TXT: see
+  FAKE_GDDY and FAKE_DIG.
 
 For `az deployment group create` the fake copies the `--parameters @file` it
 was given (content and permissions) to `$FAKE_LOG.params` and `$FAKE_LOG.mode`
@@ -140,7 +145,32 @@ case "$*" in
   "rest --method PATCH"*|"rest --method POST"*) exit 0 ;;
   "containerapp show"*)
     if [ -n "${FAKE_NO_WEB_APP:-}" ]; then exit 1; fi
-    echo "app.example.test"; exit 0 ;;
+    case "$*" in
+      *customDomainVerificationId*) echo "verify-123" ;;
+      # Domains whose binding is SniEnabled default to all of FAKE_CUSTOM_DOMAINS;
+      # FAKE_SNI_DOMAINS (even empty) overrides, to model a half-done bind.
+      *bindingType*) printf '%s\n' "${FAKE_SNI_DOMAINS-${FAKE_CUSTOM_DOMAINS:-}}" | tr ',' '\n' | grep . || true ;;
+      *customDomains*) printf '%s\n' "${FAKE_CUSTOM_DOMAINS:-}" | tr ',' '\n' | grep . || true ;;
+      *) echo "app.example.test" ;;
+    esac
+    exit 0 ;;
+  "containerapp list"*)
+    # FAKE_LIST_FAILS: the call fails (auth, network); FAKE_NO_WEB_APP: no apps.
+    if [ -n "${FAKE_LIST_FAILS:-}" ]; then echo "ERROR: (AuthorizationFailed) simulated" >&2; exit 1; fi
+    if [ -n "${FAKE_NO_WEB_APP:-}" ]; then echo 0; else echo 1; fi
+    exit 0 ;;
+  "containerapp hostname list"*)
+    echo "${FAKE_BINDING:-SniEnabled}"; exit 0 ;;
+  "containerapp env certificate list"*)
+    # FAKE_CERT_STATES: comma list of provisioning states returned by successive
+    # calls (the last one repeats); "none" = no certificate yet. Default: Succeeded.
+    st="$FAKE_LOG.state"; mkdir -p "$st"
+    n=$(cat "$st/certcalls" 2>/dev/null || echo 0); echo $((n+1)) > "$st/certcalls"
+    IFS=',' read -r -a states <<<"${FAKE_CERT_STATES:-Succeeded}"
+    i=$n; [ "$i" -ge "${#states[@]}" ] && i=$((${#states[@]}-1))
+    s=${states[$i]}
+    if [ "$s" = none ]; then echo '[]'; else echo "[{\"name\":\"mc-cae-blogstudio-blog-studio-1234\",\"state\":\"$s\"}]"; fi
+    exit 0 ;;
 esac
 exit 0
 """
@@ -276,6 +306,48 @@ esac
 """
 
 
+# Stands in for gddy. `dns list` prints {"data": [...]} (the envelope gddy uses
+# for every command) for the records of one type and name; `dns add` appends to
+# a state file unless --dry-run or FAKE_GDDY_IGNORE_ADD.
+# FAKE_GDDY_RECORDS: preset records, one "TYPE|name|data" per line.
+FAKE_GDDY = r"""#!/usr/bin/env bash
+echo "$*" >> "$FAKE_LOG.gddy"
+state="$FAKE_LOG.gddy-records"
+touch "$state"
+[ "$1 $2" = "dns list" ] || [ "$1 $2" = "dns add" ] || exit 2
+cmd=$2; shift 2
+zone=$1; shift
+type=""; name=""; data=""; dry=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --type) type=$2; shift ;;
+    --name) name=$2; shift ;;
+    --data) data=$2; shift ;;
+    --dry-run) dry=1 ;;
+  esac
+  shift
+done
+if [ "$cmd" = list ]; then
+  { printf '%s\n' "${FAKE_GDDY_RECORDS:-}"; cat "$state"; } | grep . |
+    awk -F'|' -v t="$type" -v n="$name" '$1==t && $2==n' |
+    jq -R -s -c 'split("\n") | map(select(length>0) | split("|") | {name: .[1], data: .[2], ttl: 3600}) | {data: .}'
+  exit 0
+fi
+if [ "$dry" = 0 ] && [ -z "${FAKE_GDDY_IGNORE_ADD:-}" ]; then echo "$type|$name|$data" >> "$state"; fi
+echo '{"data":[]}'
+"""
+
+# Stands in for dig +short. FAKE_DIG_CNAME and FAKE_DIG_TXT are printed as dig
+# would (CNAME with a trailing dot, TXT in quotes).
+FAKE_DIG = r"""#!/usr/bin/env bash
+echo "$*" >> "$FAKE_LOG.dig"
+case "$*" in
+  *"CNAME "*) printf '%s\n' "${FAKE_DIG_CNAME:-}" ;;
+  *"TXT "*) printf '%s\n' "${FAKE_DIG_TXT:-}" ;;
+esac
+"""
+
+
 @pytest.fixture
 def fake_az(tmp_path: Path) -> FakeAz:
     bin_dir = tmp_path / "bin"
@@ -289,6 +361,10 @@ def fake_az(tmp_path: Path) -> FakeAz:
     curl = bin_dir / "curl"
     curl.write_text(FAKE_CURL)
     curl.chmod(0o755)
+    for tool_name, body in (("gddy", FAKE_GDDY), ("dig", FAKE_DIG)):
+        tool = bin_dir / tool_name
+        tool.write_text(body)
+        tool.chmod(0o755)
     return FakeAz(
         log=tmp_path / "az.log",
         bin_dir=bin_dir,
