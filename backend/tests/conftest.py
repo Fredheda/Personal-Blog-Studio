@@ -298,6 +298,48 @@ esac
 """
 
 
+# Stands in for gddy. `dns list` prints {"data": [...]} (the envelope gddy uses
+# for every command) for the records of one type and name; `dns add` appends to
+# a state file unless --dry-run or FAKE_GDDY_IGNORE_ADD.
+# FAKE_GDDY_RECORDS: preset records, one "TYPE|name|data" per line.
+FAKE_GDDY = r"""#!/usr/bin/env bash
+echo "$*" >> "$FAKE_LOG.gddy"
+state="$FAKE_LOG.gddy-records"
+touch "$state"
+[ "$1 $2" = "dns list" ] || [ "$1 $2" = "dns add" ] || exit 2
+cmd=$2; shift 2
+zone=$1; shift
+type=""; name=""; data=""; dry=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --type) type=$2; shift ;;
+    --name) name=$2; shift ;;
+    --data) data=$2; shift ;;
+    --dry-run) dry=1 ;;
+  esac
+  shift
+done
+if [ "$cmd" = list ]; then
+  { printf '%s\n' "${FAKE_GDDY_RECORDS:-}"; cat "$state"; } | grep . |
+    awk -F'|' -v t="$type" -v n="$name" '$1==t && $2==n' |
+    jq -R -s -c 'split("\n") | map(select(length>0) | split("|") | {name: .[1], data: .[2], ttl: 3600}) | {data: .}'
+  exit 0
+fi
+if [ "$dry" = 0 ] && [ -z "${FAKE_GDDY_IGNORE_ADD:-}" ]; then echo "$type|$name|$data" >> "$state"; fi
+echo '{"data":[]}'
+"""
+
+# Stands in for dig +short. FAKE_DIG_CNAME and FAKE_DIG_TXT are printed as dig
+# would (CNAME with a trailing dot, TXT in quotes).
+FAKE_DIG = r"""#!/usr/bin/env bash
+echo "$*" >> "$FAKE_LOG.dig"
+case "$*" in
+  *"CNAME "*) printf '%s\n' "${FAKE_DIG_CNAME:-}" ;;
+  *"TXT "*) printf '%s\n' "${FAKE_DIG_TXT:-}" ;;
+esac
+"""
+
+
 @pytest.fixture
 def fake_az(tmp_path: Path) -> FakeAz:
     bin_dir = tmp_path / "bin"
@@ -311,6 +353,10 @@ def fake_az(tmp_path: Path) -> FakeAz:
     curl = bin_dir / "curl"
     curl.write_text(FAKE_CURL)
     curl.chmod(0o755)
+    for tool_name, body in (("gddy", FAKE_GDDY), ("dig", FAKE_DIG)):
+        tool = bin_dir / tool_name
+        tool.write_text(body)
+        tool.chmod(0o755)
     return FakeAz(
         log=tmp_path / "az.log",
         bin_dir=bin_dir,
