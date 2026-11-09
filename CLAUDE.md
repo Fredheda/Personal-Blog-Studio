@@ -23,12 +23,14 @@ Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) b
 | Entra login app, owner assignment, client secret (`--rotate` replaces the secret) | `./scripts/setup-easyauth.sh [--apply] [--rotate]` |
 | Approve one more read API caller by client ID | `./scripts/approve-client.sh <client-id> [--apply]` |
 | Three-step live gate (adds then removes temporary credentials) | `./scripts/live-gate.sh [--run]` |
+| Studio custom domain: DNS records at GoDaddy (`dns`), hostname bind with a managed certificate (`bind`); dry run unless `--apply` | `./scripts/bind-domain.sh dns\|bind [--apply]` |
 | Compile the Bicep (local, no login) | `az bicep build --file infra/main.bicep --stdout >/dev/null` |
 
 - Script tests use a fake `az` (`backend/tests/conftest.py`); the Bicep is checked structurally (`backend/tests/test_infra_bicep.py`). Check shell scripts with `shellcheck -x -P SCRIPTDIR`.
 - The read API identity has no role on `blog-drafts` and no write role anywhere; `approvedClientIds` cannot be empty; no auth config is conditional. Tests pin all three.
 - `deploy.sh` reads the git-ignored `.env` (names in `.env.example`; the Entra scripts write the IDs and the Easy Auth secret) and needs an explicit full SHA whose images exist. Secrets reach `az`, `curl` and `jq` only through mode-600 temporary files or the environment, never through arguments.
 - The Entra scripts are dry runs unless given `--apply` (`--run` for the gate) and re-apply every property on each run. Run them only on the owner's explicit yes for that run.
+- The web app's custom domain is declared in the Bicep from `BLOG_WEB_CUSTOM_DOMAIN` and `BLOG_WEB_CERTIFICATE_NAME` (written by `bind-domain.sh`); `deploy.sh` refuses a deploy that would unbind it.
 
 ## Commands
 
