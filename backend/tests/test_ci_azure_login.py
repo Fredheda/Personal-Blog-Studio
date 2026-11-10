@@ -15,6 +15,8 @@ def test_it_exchanges_the_github_token_for_an_azure_session(fake_az: FakeAz) -> 
     (curl,) = fake_az.curl_calls
     assert "audience=api://AzureADTokenExchange" in curl
     assert "https://oidc.example.test/token" in curl
+    # The runner's request token goes to curl on stdin (-K -), not as an argument.
+    assert "-K -" in curl and "request-token" not in curl
     (login,) = [c for c in fake_az.calls if c.startswith("login")]
     assert "--service-principal -u client-1 -t tenant-1" in login
     assert "--federated-token fake-oidc-token" in login

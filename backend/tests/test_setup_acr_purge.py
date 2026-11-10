@@ -36,7 +36,9 @@ def test_the_filters_name_only_this_projects_sha_tags(fake_az: FakeAz) -> None:
     fake_az.run(SCRIPT, env=RUNNING)
     (run,) = calls(fake_az, "acr run")
     for repo in REPOS:
-        assert f"--filter '{repo}:^[0-9a-f]{{40}}$'" in run
+        # The repository part is a regex: anchored, so `blogapi` cannot also match
+        # another project's `x-blogapi` or `blogapi2` in the shared registry.
+        assert f"--filter '^{repo}$:^[0-9a-f]{{40}}$'" in run
     assert run.count("--filter") == 3
     assert "--ago 30d --keep 10 --untagged" in run
     assert "--include-locked" not in run

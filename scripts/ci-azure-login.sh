@@ -9,8 +9,9 @@
 # Azure CLI so the pipeline needs no third-party action (the repo allows only
 # GitHub-owned actions and a short list).
 #
-# `az login --federated-token` takes the token as an argument. It is valid for
-# minutes, the runner is ephemeral and the value is masked in the run log first.
+# `az login --federated-token` takes the exchanged token as an argument (the one
+# accepted exception to "no secret on a command line"): it is valid for minutes,
+# the runner is ephemeral and the value is masked in the run log first.
 #
 # Usage: ./scripts/ci-azure-login.sh <managed-identity-client-id>
 # Needs: AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID in the environment, and the
@@ -27,9 +28,11 @@ if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUES
   exit 1
 fi
 
-token=$(curl -sSfG -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-  --data-urlencode "audience=api://AzureADTokenExchange" \
-  "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+# The runner's request token goes to curl as a config line on stdin, not as an
+# argument.
+token=$(curl -sSfG -K - --data-urlencode "audience=api://AzureADTokenExchange" \
+  "$ACTIONS_ID_TOKEN_REQUEST_URL" \
+  <<<"header = \"Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN\"" | jq -r .value)
 if [ -z "$token" ] || [ "$token" = "null" ]; then
   echo "ERROR: GitHub returned no OIDC token." >&2
   exit 1

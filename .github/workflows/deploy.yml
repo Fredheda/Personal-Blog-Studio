@@ -16,7 +16,8 @@ on:
         required: false
         default: ""
 
-# One deploy at a time; a second click waits instead of racing the first.
+# One deploy at a time; a second click waits for the first. GitHub keeps one
+# pending run, so a third click replaces the waiting second one.
 concurrency:
   group: deploy-production
   cancel-in-progress: false

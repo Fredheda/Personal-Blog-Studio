@@ -60,7 +60,9 @@ done
 purge="acr purge"
 for entry in "${IMAGES[@]}"; do
   IFS='|' read -r repo _ _ _ <<<"$entry"
-  purge+=" --filter '$repo:^[0-9a-f]{40}\$'"
+  # The repository part is a regular expression: anchored, so it cannot also
+  # match another project's repository that merely contains the name.
+  purge+=" --filter '^$repo\$:^[0-9a-f]{40}\$'"
 done
 purge+=" --ago $AGO --keep $KEEP --untagged"
 
