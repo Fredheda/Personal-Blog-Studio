@@ -52,6 +52,7 @@ else
   echo "The web app is not deployed yet: only the $CUSTOM_DOMAIN redirect is registered. Re-run after the first deploy."
 fi
 az ad app update --id "$APP_ID" --web-redirect-uris "${redirects[@]}" --enable-id-token-issuance true --output none
+echo "Redirect URIs set: ${redirects[*]}"
 
 graph_patch "servicePrincipals/$SP_ID" '{"appRoleAssignmentRequired": true}'
 

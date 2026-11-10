@@ -51,6 +51,7 @@ case "$*" in
     # last rule survives.
     all="$*"
     json=${all#*cors.corsRules=}
+    json=${json% --output none}
     if [ -n "${FAKE_CORS_IGNORE_UPDATE:-}" ]; then exit 0; fi
     if [ -n "${FAKE_CORS_DROP_OTHERS:-}" ]; then json=$(echo "$json" | jq -c '[.[-1]]'); fi
     echo "$json" > "$FAKE_LOG.cors"; exit 0 ;;

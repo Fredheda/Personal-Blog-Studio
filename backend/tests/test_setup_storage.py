@@ -91,7 +91,8 @@ def cors_writes(fake_az: FakeAz) -> list[str]:
 
 
 def cors_rules_written(call: str) -> list[dict]:
-    return json.loads(call.split("cors.corsRules=", 1)[1])
+    value = call.split("cors.corsRules=", 1)[1].removesuffix(" --output none")
+    return json.loads(value)
 
 
 def test_a_dry_run_prints_every_change_and_writes_nothing(fake_az: FakeAz) -> None:
@@ -128,6 +129,24 @@ def test_apply_adds_the_cors_rule_when_the_service_has_none(fake_az: FakeAz) -> 
     adds = cors_writes(fake_az)
     assert len(adds) == 1
     assert [r["allowedOrigins"] for r in cors_rules_written(adds[0])] == [[ORIGIN]]
+
+
+def test_every_write_is_silent_but_still_echoed_as_a_command(fake_az: FakeAz) -> None:
+    # The service answers a write with JSON that includes the subscription id.
+    # The script prints its own "+ az ..." line and status lines instead.
+    result = fake_az.run(
+        SCRIPT,
+        "--apply",
+        env={"FAKE_BLOB_SD": "false", "FAKE_CONTAINER_SD": "false"},
+    )
+    assert result.returncode == 0, result.stderr
+    calls = writes(fake_az)
+    assert len(calls) == 3  # CORS, soft delete, lifecycle policy
+    for call in calls:
+        assert "--output none" in call, call
+        assert f"+ az {call}" in result.stdout, call
+    assert result.stdout.count("+ az ") == 3
+    assert "CORS: verified" in result.stdout
 
 
 def cors_reads(fake_az: FakeAz) -> list[str]:
@@ -231,7 +250,8 @@ def test_soft_delete_is_left_alone_when_both_are_on(fake_az: FakeAz) -> None:
 
 
 def policy_arg(call: str) -> dict:
-    return json.loads(call.split("--policy ", 1)[1])
+    value = call.split("--policy ", 1)[1].removesuffix(" --output none")
+    return json.loads(value)
 
 
 def test_the_lifecycle_rule_is_merged_with_the_existing_rules(fake_az: FakeAz) -> None:

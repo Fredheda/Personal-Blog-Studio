@@ -57,6 +57,28 @@ def test_apply_registers_both_redirects_once_the_web_app_exists(
     assert "--enable-id-token-issuance true" in update[0]
 
 
+def test_apply_says_which_redirect_uris_it_set(fake_az: FakeAz, tmp_path: Path) -> None:
+    # The update itself is silent (--output none), so the script reports it.
+    both = run(fake_az, tmp_path, "--apply")
+    assert both.returncode == 0, both.stderr
+    line = next(
+        x for x in both.stdout.splitlines() if x.startswith("Redirect URIs set:")
+    )
+    assert CUSTOM in line and DEFAULT in line
+    only = run(fake_az, tmp_path, "--apply", FAKE_NO_WEB_APP="1")
+    line = next(
+        x for x in only.stdout.splitlines() if x.startswith("Redirect URIs set:")
+    )
+    assert CUSTOM in line and DEFAULT not in line
+
+
+def test_a_dry_run_does_not_claim_to_have_set_redirect_uris(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    result = run(fake_az, tmp_path)
+    assert "Redirect URIs set:" not in result.stdout
+
+
 def test_before_the_first_deploy_only_the_custom_domain_is_registered(
     fake_az: FakeAz, tmp_path: Path
 ) -> None:
