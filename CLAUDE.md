@@ -24,12 +24,17 @@ Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) b
 | Approve one more read API caller by client ID | `./scripts/approve-client.sh <client-id> [--apply]` |
 | Three-step live gate (adds then removes temporary credentials) | `./scripts/live-gate.sh [--run]` |
 | Studio custom domain: DNS records at GoDaddy (`dns`), hostname bind with a managed certificate (`bind`); dry run unless `--apply` | `./scripts/bind-domain.sh dns\|bind [--apply]` |
+| Deploy code: manual workflow, the owner approves the run (rollback = older SHA) | `gh workflow run deploy.yml --ref main [-f sha=<full-sha>]` |
+| Laptop fallback for the same (clean tree) | `./scripts/ship.sh` |
+| One-time GitHub OIDC setup: identities, roles, `production` environment, secrets (dry run; `--apply` writes) | `./scripts/setup-github-deploy.sh [--apply]` |
+| Registry purge: lock running tags, weekly task for this project's repositories (dry run; `--apply` writes) | `./scripts/setup-acr-purge.sh [--apply]` |
 | Compile the Bicep (local, no login) | `az bicep build --file infra/main.bicep --stdout >/dev/null` |
 
 - Script tests use a fake `az` (`backend/tests/conftest.py`); the Bicep is checked structurally (`backend/tests/test_infra_bicep.py`). Check shell scripts with `shellcheck -x -P SCRIPTDIR`.
 - The read API identity has no role on `blog-drafts` and no write role anywhere; `approvedClientIds` cannot be empty; no auth config is conditional. Tests pin all three.
 - `deploy.sh` reads the git-ignored `.env` (names in `.env.example`; the Entra scripts write the IDs and the Easy Auth secret) and needs an explicit full SHA whose images exist. Secrets reach `az`, `curl` and `jq` only through mode-600 temporary files or the environment, never through arguments.
 - The Entra scripts are dry runs unless given `--apply` (`--run` for the gate) and re-apply every property on each run. Run them only on the owner's explicit yes for that run.
+- Code deploys go through the Deploy workflow (`production` environment, owner approval), infra through `deploy.sh`. `redeploy.sh <sha>` and `ship.sh` change production too: owner's yes for each run. Never approve a waiting deployment.
 - The web app's custom domain is declared in the Bicep from `BLOG_WEB_CUSTOM_DOMAIN` and `BLOG_WEB_CERTIFICATE_NAME` (written by `bind-domain.sh`); `deploy.sh` refuses a deploy that would unbind it.
 
 ## Commands
@@ -46,7 +51,7 @@ Python 3.13 with Poetry 2 (backend); Node 24 with npm 12.2.2 (frontend, Next.js 
 | Frontend lint, build, types | `cd frontend && npm run lint && npm run build && npx tsc --noEmit` (the build writes `next-env.d.ts`, which tsc needs) |
 | All CI checks | `./scripts/ci-local.sh` (the gate before `gh pr ready`) |
 
-CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test` and `frontend-checks` on pull requests only; a push to `main` runs no CI, because the PR already ran it.
+CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test` and `frontend-checks` on pull requests only; a push to `main` runs no CI, because the PR already ran it. Images are built on demand by the Deploy workflow, never by CI.
 
 ## Gotchas
 

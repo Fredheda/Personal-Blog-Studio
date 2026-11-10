@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # RG and IMAGES are used by the scripts that source this file
-# Shared by build-push.sh and infra/deploy.sh: the one list of images and
-# container apps, so building and deploying can never disagree about what this
-# project ships. Sourced, not executed.
+# Shared by build-push.sh, redeploy.sh, wait-healthy.sh, setup-acr-purge.sh and
+# infra/deploy.sh: the one list of images and container apps, so building,
+# deploying, locking and purging can never disagree about what this project
+# ships. Sourced, not executed.
 
 ACR=acrchatbotfredheda
 RG=rg-chatbot
@@ -25,4 +26,16 @@ is_sha() {
 # True if <repo>:<tag> exists in the registry.
 image_exists() {
   az acr repository show -n "$ACR" --image "$1:$2" -o none >/dev/null 2>&1
+}
+
+# Protect a deployed tag from `acr purge` (it can still be re-pushed).
+lock_tag() {
+  az acr repository update -n "$ACR" --image "$1:$2" \
+    --delete-enabled false --write-enabled true --output none
+}
+
+# Make a tag purgeable again once no app runs it.
+unlock_tag() {
+  az acr repository update -n "$ACR" --image "$1:$2" \
+    --delete-enabled true --write-enabled true --output none
 }
