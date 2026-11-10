@@ -36,6 +36,21 @@ Each Entra or Azure write is a separate go from the owner. The scripts are dry r
    3. `./scripts/bind-domain.sh bind` (dry run), then `--apply`: adds the hostname, binds a free managed certificate, waits for it and writes `BLOG_WEB_CUSTOM_DOMAIN` and `BLOG_WEB_CERTIFICATE_NAME` to `.env`.
    4. `./infra/deploy.sh <sha>` once more: the Bicep now declares the domain, so deploys keep it.
 
+## Deploy by button
+
+Code changes reach the apps only through the manual **Deploy** workflow; infrastructure (Bicep, secrets, the custom domain) still goes through `./infra/deploy.sh` from the laptop.
+
+One-time setup (each needs the owner's yes; both are dry runs until `--apply`):
+
+1. `./scripts/setup-github-deploy.sh`, then `--apply`: the identities `id-blogstudio-gh-build` and `id-blogstudio-gh-deploy` with their roles, one federated credential each (trusting only the `production` environment), the `production` environment (main only, the owner as required reviewer, admins cannot bypass) and the four `AZURE_*` repo secrets.
+2. `./scripts/setup-acr-purge.sh` (read the dry run), then `--apply`: locks the running tags and creates the weekly purge task for this project's three repositories.
+
+To deploy: `gh workflow run deploy.yml --ref main` (or Actions, Deploy, Run workflow; leave the SHA empty for the head of `main`). The run stops at `waiting`; the owner approves it in GitHub (Actions, the run, Review deployments). It validates the SHA, builds the three images if they do not exist (build identity), rolls the apps and swaps the tag locks (deploy identity), and waits for the new revisions. A coding agent never approves the run.
+
+Rollback: the same button with an older commit SHA whose images still exist. Laptop fallback: `./scripts/ship.sh` (clean tree, builds and rolls `HEAD`).
+
+Limits: the registry is in legacy permission mode, so pushes cannot be scoped per repository (the deploy identity's `AcrPush` also allows pushing). `redeploy.sh` updates the apps one at a time, so a failure between them leaves mixed versions until the button is pressed again. `infra/deploy.sh` needs the deployed SHA as its argument: it never defaults to the local `HEAD`.
+
 ## Checks without Azure
 
 - `cd backend && poetry run pytest -v`: script tests run against a fake `az`; the Bicep is checked structurally.
@@ -57,4 +72,4 @@ Each Entra or Azure write is a separate go from the owner. The scripts are dry r
 
 ## Limits
 
-The registry is in legacy permission mode, so pushes cannot be scoped per repository. `deploy.sh` updates all three apps in one deployment; a failed deployment leaves the previous revisions serving. Rollback by SHA, the Deploy workflow and the registry purge arrive with BLOG-16.
+The registry is in legacy permission mode, so pushes cannot be scoped per repository. `deploy.sh` updates all three apps in one deployment; a failed deployment leaves the previous revisions serving. Rollback is the Deploy button with an older SHA.
