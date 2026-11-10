@@ -16,6 +16,9 @@ without touching it:
   SniEnabled); FAKE_CERT_STATES: see the certificate case.
 - FAKE_GDDY_RECORDS / FAKE_GDDY_IGNORE_ADD and FAKE_DIG_CNAME / FAKE_DIG_TXT: see
   FAKE_GDDY and FAKE_DIG.
+- FAKE_IMAGE_<APP> (running image), FAKE_FAIL_UPDATE (app name), FAKE_PROVISIONING
+  (comma list), FAKE_NO_TASK, FAKE_HAS_IDENTITIES / FAKE_HAS_CRED ("identity/cred"
+  list), FAKE_OWNER_ID, FAKE_POLICY_NAMES: see the cases and FAKE_GH.
 
 For `az deployment group create` the fake copies the `--parameters @file` it
 was given (content and permissions) to `$FAKE_LOG.params` and `$FAKE_LOG.mode`
@@ -74,7 +77,9 @@ case "$*" in
       echo "$file" > "$FAKE_LOG.paramfile"
     fi
     exit 0 ;;
-  "account show"*) echo "tenant-1"; exit 0 ;;
+  "account show"*)
+    case "$*" in *tenantId*) echo "tenant-1" ;; *) echo "sub-1" ;; esac
+    exit 0 ;;
   "ad signed-in-user show"*) echo "owner-oid"; exit 0 ;;
   "ad app list"*)
     # Like the live service: --display-name matches names that START with the
@@ -152,6 +157,15 @@ case "$*" in
       # FAKE_SNI_DOMAINS (even empty) overrides, to model a half-done bind.
       *bindingType*) printf '%s\n' "${FAKE_SNI_DOMAINS-${FAKE_CUSTOM_DOMAINS:-}}" | tr ',' '\n' | grep . || true ;;
       *customDomains*) printf '%s\n' "${FAKE_CUSTOM_DOMAINS:-}" | tr ',' '\n' | grep . || true ;;
+      *latestRevisionName*)
+        app=$(echo "$*" | sed -E 's/.*-n ([^ ]+).*/\1/'); echo "$app--rev1" ;;
+      *"template.containers"*)
+        # The image an app runs now: FAKE_IMAGE_<APP> with dashes as underscores.
+        app=$(echo "$*" | sed -E 's/.*-n ([^ ]+).*/\1/')
+        var="FAKE_IMAGE_$(echo "$app" | tr 'a-z-' 'A-Z_')"; echo "${!var:-}" ;;
+      *"--query id"*)
+        app=$(echo "$*" | sed -E 's/.*-n ([^ ]+).*/\1/')
+        echo "/subscriptions/sub-1/resourceGroups/rg-chatbot/providers/Microsoft.App/containerApps/$app" ;;
       *) echo "app.example.test" ;;
     esac
     exit 0 ;;
@@ -172,6 +186,52 @@ case "$*" in
     s=${states[$i]}
     if [ "$s" = none ]; then echo '[]'; else echo "[{\"name\":\"mc-cae-blogstudio-blog-studio-1234\",\"state\":\"$s\"}]"; fi
     exit 0 ;;
+  "containerapp update"*)
+    app=$(echo "$*" | sed -E 's/.*-n ([^ ]+).*/\1/')
+    [ "$app" = "${FAKE_FAIL_UPDATE:-}" ] && exit 1
+    exit 0 ;;
+  "containerapp revision show"*)
+    # FAKE_PROVISIONING: comma list of states returned by successive calls (the last repeats).
+    st="$FAKE_LOG.state"; mkdir -p "$st"
+    n=$(cat "$st/provisioning" 2>/dev/null || echo 0)
+    IFS=',' read -r -a states <<<"${FAKE_PROVISIONING:-Provisioned}"
+    last=$(( ${#states[@]} - 1 )); idx=$(( n > last ? last : n ))
+    echo "${states[$idx]}"; echo $(( n + 1 )) > "$st/provisioning"
+    exit 0 ;;
+  "acr show"*)
+    echo "/subscriptions/sub-1/resourceGroups/rg-chatbot/providers/Microsoft.ContainerRegistry/registries/acrchatbotfredheda"
+    exit 0 ;;
+  "acr task show"*)
+    [ -n "${FAKE_NO_TASK:-}" ] && exit 1
+    exit 0 ;;
+  "acr run"*|"acr task create"*|"acr task delete"*|"acr repository update"*) exit 0 ;;
+  "identity show"*)
+    name=$(echo "$*" | sed -E 's/.*-n ([^ ]+).*/\1/')
+    case "$*" in
+      *principalId*) echo "principal-$name"; exit 0 ;;
+      *clientId*) echo "client-$name"; exit 0 ;;
+      *"--query id"*) echo "/subscriptions/sub-1/resourceGroups/rg-chatbot/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$name"; exit 0 ;;
+    esac
+    # Existence check: a fresh account has none; FAKE_HAS_IDENTITIES models a re-run.
+    [ -f "$FAKE_LOG.state/identity-$name" ] && exit 0
+    case ",${FAKE_HAS_IDENTITIES:-}," in *",$name,"*) exit 0 ;; esac
+    exit 1 ;;
+  "identity create"*)
+    name=$(echo "$*" | sed -E 's/.*-n ([^ ]+).*/\1/')
+    mkdir -p "$FAKE_LOG.state"; touch "$FAKE_LOG.state/identity-$name"
+    exit 0 ;;
+  "identity federated-credential show"*)
+    ident=$(echo "$*" | sed -E 's/.*--identity-name ([^ ]+).*/\1/')
+    cred=$(echo "$*" | sed -E 's/.*--name ([^ ]+).*/\1/')
+    [ -f "$FAKE_LOG.state/cred-$ident-$cred" ] && exit 0
+    case ",${FAKE_HAS_CRED:-}," in *",$ident/$cred,"*) exit 0 ;; esac
+    exit 1 ;;
+  "identity federated-credential create"*)
+    ident=$(echo "$*" | sed -E 's/.*--identity-name ([^ ]+).*/\1/')
+    cred=$(echo "$*" | sed -E 's/.*--name ([^ ]+).*/\1/')
+    mkdir -p "$FAKE_LOG.state"; touch "$FAKE_LOG.state/cred-$ident-$cred"
+    exit 0 ;;
+  "role assignment create"*) exit 0 ;;
 esac
 exit 0
 """
@@ -238,6 +298,11 @@ class FakeAz:
         )
 
     @property
+    def gh_calls(self) -> list[str]:
+        gh_log = Path(f"{self.log}.gh")
+        return gh_log.read_text().splitlines() if gh_log.exists() else []
+
+    @property
     def state_dir(self) -> Path:
         return Path(f"{self.log}.state")
 
@@ -275,6 +340,7 @@ for a in "$@"; do
   prev=$a
 done
 case "$*" in
+  *oidc.example.test*) echo '{"value":"fake-oidc-token"}' ;;
   *oauth2/v2.0/token*)
     cid=$(sed -E 's/.*client_id=([^&]*).*/\1/' "$form")
     case "$cid" in
@@ -349,6 +415,28 @@ esac
 """
 
 
+# Stands in for the GitHub CLI. Every call is logged to $FAKE_LOG.gh; the body of
+# `api ... --input -` goes to $FAKE_LOG.gh-input and the value of `secret set NAME`
+# to $FAKE_LOG.secret-NAME (read both with FakeAz.side_file). FAKE_OWNER_ID: the
+# user id printed for `api users/...` (default 4242). FAKE_POLICY_NAMES: the
+# environment's existing branch policies, one per line.
+FAKE_GH = r"""#!/usr/bin/env bash
+echo "$*" >> "$FAKE_LOG.gh"
+case "$*" in
+  "api users/"*) echo "${FAKE_OWNER_ID:-4242}"; exit 0 ;;
+  *"deployment-branch-policies"*)
+    case "$*" in *"-X POST"*) exit 0 ;; esac
+    printf '%s' "${FAKE_POLICY_NAMES:-}"; exit 0 ;;
+  *"-X PUT"*"environments/production"*)
+    cat > "$FAKE_LOG.gh-input"; echo "environment production: ensured"; exit 0 ;;
+  "secret set "*)
+    name=$(echo "$*" | sed -E 's/^secret set ([^ ]+).*/\1/')
+    cat > "$FAKE_LOG.secret-$name"; exit 0 ;;
+esac
+exit 0
+"""
+
+
 @pytest.fixture
 def fake_az(tmp_path: Path) -> FakeAz:
     bin_dir = tmp_path / "bin"
@@ -362,7 +450,7 @@ def fake_az(tmp_path: Path) -> FakeAz:
     curl = bin_dir / "curl"
     curl.write_text(FAKE_CURL)
     curl.chmod(0o755)
-    for tool_name, body in (("gddy", FAKE_GDDY), ("dig", FAKE_DIG)):
+    for tool_name, body in (("gddy", FAKE_GDDY), ("dig", FAKE_DIG), ("gh", FAKE_GH)):
         tool = bin_dir / tool_name
         tool.write_text(body)
         tool.chmod(0o755)
