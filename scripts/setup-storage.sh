@@ -55,7 +55,7 @@ else
   merged=$(jq -c --argjson rule "$rule" '(. // []) + [$rule]' <<<"$cors")
   echo "CORS: keeping $(jq '(. // []) | length' <<<"$cors") existing rule(s), adding $ORIGIN."
   run az storage account blob-service-properties update -n "$ACCOUNT" -g "$SA_RG" \
-    --set "cors.corsRules=$merged"
+    --set "cors.corsRules=$merged" --output none
   if [ "$APPLY" -eq 1 ]; then
     # A successful call is not proof: read the rules back. Our origin must be
     # there, and no existing rule may have been lost.
@@ -85,7 +85,7 @@ sd_args=()
 if [ "${#sd_args[@]}" -eq 0 ]; then
   echo "Soft delete: blob and container already on; left unchanged."
 else
-  run az storage account blob-service-properties update -n "$ACCOUNT" -g "$SA_RG" "${sd_args[@]}"
+  run az storage account blob-service-properties update -n "$ACCOUNT" -g "$SA_RG" "${sd_args[@]}" --output none
 fi
 
 # 3. Lifecycle rule (merged into the existing policy) --------------------------
@@ -113,5 +113,5 @@ else
   merged=$(jq -c -n --argjson rules "$existing" --argjson rule "$rule" \
     '{rules: (($rules | map(select(.name != $rule.name))) + [$rule])}')
   echo "Lifecycle: keeping $(jq 'length' <<<"$existing") existing rule(s), adding or replacing $RULE_NAME."
-  run az storage account management-policy create --account-name "$ACCOUNT" -g "$SA_RG" --policy "$merged"
+  run az storage account management-policy create --account-name "$ACCOUNT" -g "$SA_RG" --policy "$merged" --output none
 fi
