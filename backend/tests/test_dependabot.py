@@ -57,7 +57,7 @@ def test_every_ecosystem_is_weekly_waits_14_days_and_groups_minor_and_patch() ->
 
 
 def test_major_updates_are_not_grouped_with_the_rest() -> None:
-    grouped = re.findall(r"^\s+update-types: \[(.*)\]\s*$", TEXT, re.MULTILINE)
+    grouped = re.findall(r"^\s+update-types: \[([a-z, ]*)\]\s*$", TEXT, re.MULTILINE)
     assert grouped and all("major" not in types for types in grouped)
 
 
