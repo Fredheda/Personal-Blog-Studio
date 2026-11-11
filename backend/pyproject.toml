@@ -6,6 +6,10 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi==0.139.0",
     "uvicorn==0.50.0",
+    "pydantic==2.14.3",
+    "azure-storage-blob==12.31.1",
+    "azure-identity==1.27.0",
+    "python-ulid==4.1.0",
 ]
 
 [tool.poetry]
