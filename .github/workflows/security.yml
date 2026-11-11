@@ -4,8 +4,9 @@ name: Security
 # on every push to a PR, draft or not. The other scans run when the PR is
 # marked ready, on the weekly schedule and on demand
 # (`gh workflow run security.yml --ref main`). Linting the workflow files is the
-# workflow-lint job of ci.yml and is not repeated here. The ruleset on main
-# requires gitleaks and bandit; the audits and codeql are advisory.
+# workflow-lint job of ci.yml and is not repeated here. gitleaks and bandit are
+# meant to be required checks on main (added to the ruleset after their first
+# green run); the audits and codeql are advisory.
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
