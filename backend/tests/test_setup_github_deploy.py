@@ -5,7 +5,9 @@ from conftest import FakeAz
 
 SCRIPT = "scripts/setup-github-deploy.sh"
 REPO = "Fredheda/Personal-Blog-Studio"
-SUBJECT = f"repo:{REPO}:environment:production"
+PREFIX = "repo:Fredheda@77542239/Personal-Blog-Studio@1450352278"
+SUBJECT = f"{PREFIX}:environment:production"
+CLASSIC_SUBJECT = f"repo:{REPO}:environment:production"
 BUILD = "id-blogstudio-gh-build"
 DEPLOY = "id-blogstudio-gh-deploy"
 APPS = ("ca-blogstudio-web", "ca-blogstudio-api", "ca-blogapi")
@@ -123,6 +125,54 @@ def test_both_federated_credentials_trust_only_the_production_environment(
         assert "--audiences api://AzureADTokenExchange" in call
         assert "--issuer https://token.actions.githubusercontent.com" in call
         assert "refs/heads" not in call
+
+
+def test_the_subject_comes_from_the_repos_oidc_setting_read_only(
+    fake_az: FakeAz,
+) -> None:
+    result = fake_az.run(SCRIPT)
+    assert result.returncode == 0, result.stderr
+    assert f"subject {SUBJECT}" in result.stdout
+    assert f"repo prefix {PREFIX}" in result.stdout
+    (read,) = [c for c in fake_az.gh_calls if "actions/oidc/customization/sub" in c]
+    assert f"repos/{REPO}/" in read and "-X" not in read
+
+
+def test_a_repo_without_an_immutable_prefix_gets_the_classic_subject(
+    fake_az: FakeAz,
+) -> None:
+    result = fake_az.run(SCRIPT, "--apply", env={"FAKE_SUB_PREFIX": ""})
+    assert result.returncode == 0, result.stderr
+    creates = [
+        c for c in fake_az.calls if c.startswith("identity federated-credential create")
+    ]
+    assert len(creates) == 2
+    assert all(f"--subject {CLASSIC_SUBJECT}" in c for c in creates)
+
+
+def test_an_unexpected_prefix_stops_the_script_before_any_write(
+    fake_az: FakeAz,
+) -> None:
+    result = fake_az.run(SCRIPT, "--apply", env={"FAKE_SUB_PREFIX": "oidc:other"})
+    assert result.returncode == 1
+    assert "sub_claim_prefix" in result.stderr
+    assert azure_writes(fake_az) == [] and github_writes(fake_az) == []
+
+
+def test_an_existing_credential_with_another_subject_fails_the_dry_run_and_the_apply(
+    fake_az: FakeAz,
+) -> None:
+    env = {
+        "FAKE_HAS_IDENTITIES": f"{BUILD},{DEPLOY}",
+        "FAKE_HAS_CRED": f"{BUILD}/github-production",
+        "FAKE_CRED_SUBJECT": CLASSIC_SUBJECT,
+    }
+    for args in ((), ("--apply",)):
+        result = fake_az.run(SCRIPT, *args, env=env)
+        assert result.returncode == 1, args
+        assert "MISMATCH" in result.stderr
+        assert CLASSIC_SUBJECT in result.stderr and SUBJECT in result.stderr
+    assert azure_writes(fake_az) == [] and github_writes(fake_az) == []
 
 
 def test_the_environment_is_main_only_with_the_owner_as_required_reviewer(
