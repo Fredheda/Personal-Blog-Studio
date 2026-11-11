@@ -6,7 +6,11 @@ P = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 
 
 def test_container_names_and_index() -> None:
-    assert (layout.DRAFTS, layout.PUBLISHED, layout.INDEX) == ("blog-drafts", "blog-published", "index.json")
+    assert (layout.DRAFTS, layout.PUBLISHED, layout.INDEX) == (
+        "blog-drafts",
+        "blog-published",
+        "index.json",
+    )
 
 
 def test_draft_paths() -> None:
@@ -14,7 +18,10 @@ def test_draft_paths() -> None:
     assert layout.draft_body(P) == f"posts/{P}/draft.md"
     assert layout.draft_meta(P) == f"posts/{P}/draft.json"
     assert layout.revision_prefix(P) == f"posts/{P}/rev/"
-    assert layout.revision_body(P, "20261110T120000123Z") == f"posts/{P}/rev/20261110T120000123Z.md"
+    assert (
+        layout.revision_body(P, "20261110T120000123Z")
+        == f"posts/{P}/rev/20261110T120000123Z.md"
+    )
     assert layout.media_original("m_1", "png") == "media/m_1/original.png"
     assert layout.media_meta("m_1") == "media/m_1/meta.json"
 
@@ -29,7 +36,13 @@ def test_published_paths() -> None:
 
 @pytest.mark.parametrize("bad", ["", "../x", "a/b", P[:-1], P + "A", P.lower()])
 def test_a_bad_post_id_raises(bad: str) -> None:
-    for build in (layout.post_folder, layout.draft_body, layout.draft_meta, layout.revision_prefix, layout.versions_prefix):
+    for build in (
+        layout.post_folder,
+        layout.draft_body,
+        layout.draft_meta,
+        layout.revision_prefix,
+        layout.versions_prefix,
+    ):
         with pytest.raises(ValueError):
             build(bad)
     with pytest.raises(ValueError):

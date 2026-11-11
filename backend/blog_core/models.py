@@ -23,7 +23,9 @@ def now_iso(moment: datetime | None = None) -> str:
 
 
 class CamelModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True, extra="ignore"
+    )
 
     def dump(self) -> bytes:
         return self.model_dump_json(by_alias=True, indent=2).encode()
@@ -67,7 +69,9 @@ class DraftMeta(CamelModel):
         if len(value) > TAGS_MAX or len(set(value)) != len(value):
             raise ValueError(f"at most {TAGS_MAX} distinct tags")
         if not all(ids.is_tag(t) for t in value):
-            raise ValueError("a tag is lowercase letters, digits and dashes, 50 at most")
+            raise ValueError(
+                "a tag is lowercase letters, digits and dashes, 50 at most"
+            )
         return value
 
     @field_validator("cover_media_id")

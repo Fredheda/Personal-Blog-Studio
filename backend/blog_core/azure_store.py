@@ -29,7 +29,9 @@ class AzureBlobStore:
     def from_account(
         cls, account_url: str, *, managed_identity_client_id: str | None = None
     ) -> "AzureBlobStore":
-        credential = DefaultAzureCredential(managed_identity_client_id=managed_identity_client_id)
+        credential = DefaultAzureCredential(
+            managed_identity_client_id=managed_identity_client_id
+        )
         return cls(BlobServiceClient(account_url, credential=credential))
 
     @classmethod
@@ -60,7 +62,9 @@ class AzureBlobStore:
         blob = self._blob(container, path)
         try:
             if create_only:
-                result = blob.upload_blob(content, overwrite=False, content_settings=settings)
+                result = blob.upload_blob(
+                    content, overwrite=False, content_settings=settings
+                )
             elif if_match is not None:
                 result = blob.upload_blob(
                     content,
@@ -70,7 +74,9 @@ class AzureBlobStore:
                     match_condition=MatchConditions.IfNotModified,
                 )
             else:
-                result = blob.upload_blob(content, overwrite=True, content_settings=settings)
+                result = blob.upload_blob(
+                    content, overwrite=True, content_settings=settings
+                )
         except (ResourceExistsError, ResourceModifiedError, ResourceNotFoundError) as e:
             raise PreconditionFailed(f"{container}/{path}") from e
         except HttpResponseError as e:
@@ -89,7 +95,9 @@ class AzureBlobStore:
         client = self.service.get_container_client(container)
         return sorted(b.name for b in client.list_blobs(name_starts_with=prefix))
 
-    def copy(self, src_container: str, src_path: str, dst_container: str, dst_path: str) -> None:
+    def copy(
+        self, src_container: str, src_path: str, dst_container: str, dst_path: str
+    ) -> None:
         source = self._blob(src_container, src_path)
         target = self._blob(dst_container, dst_path)
         label = f"copy {src_container}/{src_path} -> {dst_container}/{dst_path}"

@@ -38,9 +38,13 @@ class InMemoryBlobStore:
         self._blobs.pop((container, path), None)
 
     def list(self, container: str, prefix: str) -> list[str]:
-        return sorted(p for c, p in self._blobs if c == container and p.startswith(prefix))
+        return sorted(
+            p for c, p in self._blobs if c == container and p.startswith(prefix)
+        )
 
-    def copy(self, src_container: str, src_path: str, dst_container: str, dst_path: str) -> None:
+    def copy(
+        self, src_container: str, src_path: str, dst_container: str, dst_path: str
+    ) -> None:
         source = self._blobs.get((src_container, src_path))
         if source is None:
             raise StoreError(f"copy source missing: {src_container}/{src_path}")

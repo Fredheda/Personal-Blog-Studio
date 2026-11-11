@@ -54,6 +54,8 @@ class BlobStore(Protocol):
         """Names of the blobs whose name starts with `prefix`, sorted."""
         ...
 
-    def copy(self, src_container: str, src_path: str, dst_container: str, dst_path: str) -> None:
+    def copy(
+        self, src_container: str, src_path: str, dst_container: str, dst_path: str
+    ) -> None:
         """Server-side copy inside the account. Overwrites the destination."""
         ...
