@@ -19,7 +19,9 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 
 from blog_core.ids import is_media_id
 
-MAX_BODY_BYTES = 1_000_000
+# Parse time grows faster than linearly on adversarial input, so the cap stays
+# well below what a long article needs (about 40 pages of text).
+MAX_BODY_BYTES = 200_000
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _ANCHOR = re.compile(r"^#[A-Za-z0-9_-]+$")
 _VIDEO = re.compile(r"^::video\{(?P<attrs>.*)\}$")

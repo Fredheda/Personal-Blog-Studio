@@ -38,7 +38,7 @@ from studio_api.errors import (
     StillPublished,
     ValidationFailed,
 )
-from studio_api.markdown import Problem, validate_body
+from studio_api.markdown import MAX_BODY_BYTES, Problem, validate_body
 
 INDEX_RETRIES = 3
 WORDS_PER_MINUTE = 200
@@ -140,6 +140,10 @@ class PostService:
 
     def update_body(self, post_id: str, body: str, *, if_match: str) -> Draft:
         self._require(post_id)
+        if len(body.encode()) > MAX_BODY_BYTES:  # also bounds restore and the agent
+            raise ValidationFailed(
+                [Problem(0, f"body is larger than {MAX_BODY_BYTES} bytes")]
+            )
         try:
             self._store.write(
                 layout.DRAFTS,

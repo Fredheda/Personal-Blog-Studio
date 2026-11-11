@@ -14,6 +14,7 @@ from studio_api.errors import (
     StillPublished,
     ValidationFailed,
 )
+from studio_api.markdown import MAX_BODY_BYTES
 from studio_api.posts import MetaPatch, PostService
 from tests.fake_blob_store import InMemoryBlobStore
 
@@ -68,6 +69,19 @@ def test_stale_body_etag_conflicts_and_keeps_the_newer_body(svc: PostService) ->
     with pytest.raises(Conflict):
         svc.update_body(d.post_id, "two", if_match=d.body_etag)
     assert svc.get(d.post_id).body == "one"
+
+
+def test_an_oversized_save_is_refused_and_leaves_the_draft_unchanged(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    d = svc.create("t")
+    d = svc.update_body(d.post_id, "small", if_match=d.body_etag)
+    store.writes.clear()
+    with pytest.raises(ValidationFailed) as e:
+        svc.update_body(d.post_id, "a" * (MAX_BODY_BYTES + 1), if_match=d.body_etag)
+    assert "larger than" in str(e.value)
+    assert store.writes == []
+    assert svc.get(d.post_id).body == "small"
 
 
 def test_meta_validation_reports_problems(svc: PostService) -> None:
