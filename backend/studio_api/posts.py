@@ -155,8 +155,6 @@ class PostService:
     def update_meta(self, post_id: str, patch: MetaPatch, *, if_match: str) -> Draft:
         draft = self.get(post_id)
         changes = patch.model_dump(exclude_none=True, exclude={"clear_cover"})
-        if "cover_media_id" in changes:
-            changes["cover_media_id"] = patch.cover_media_id
         if patch.clear_cover:
             changes["cover_media_id"] = None
         if "slug" in changes and changes["slug"] != draft.meta.slug:
@@ -371,7 +369,10 @@ class PostService:
         )
 
     def _ever_published(self, post_id: str) -> bool:
-        return bool(self._store.list(layout.PUBLISHED, layout.versions_prefix(post_id)))
+        # meta.json is written after the body and before the slug ref, so a first
+        # publish that died halfway leaves no meta.json and does not lock the slug.
+        names = self._store.list(layout.PUBLISHED, layout.versions_prefix(post_id))
+        return any(name.endswith("/meta.json") for name in names)
 
     def _latest_version(self, post_id: str) -> int:
         prefix = layout.versions_prefix(post_id)

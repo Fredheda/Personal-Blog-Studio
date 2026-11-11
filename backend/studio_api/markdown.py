@@ -91,7 +91,14 @@ def _directive_problems(content: str, found: list[str]) -> list[str]:
     attrs_text = match.group("attrs")
     if not _ATTRS_OK.match(attrs_text):
         return ["malformed ::video attributes"]
-    attrs = {m.group(1): m.group(2) for m in _ATTR.finditer(attrs_text)}  # None = bare
+    pairs = [
+        (m.group(1), m.group(2)) for m in _ATTR.finditer(attrs_text)
+    ]  # None = bare
+    names = [name for name, _ in pairs]
+    if len(names) != len(set(names)):
+        # A client that kept the first value would see an id nothing validated.
+        return ["repeated ::video attribute"]
+    attrs = dict(pairs)
     problems: list[str] = []
     for name, value in attrs.items():
         if name not in _VALUE_ATTRS | _FLAG_ATTRS:
@@ -141,7 +148,11 @@ def _check_inline(
         for message in _directive_problems(inline.content.strip(), result.media_ids):
             result.problems.append(Problem(line, message))
         return
-    for child in inline.children or []:
+    _check_children(inline.children or [], line, result)
+
+
+def _check_children(children: list[Token], line: int, result: Checked) -> None:
+    for child in children:
         message = None
         if child.type == "html_inline":
             message = "raw HTML is not allowed"
@@ -149,5 +160,7 @@ def _check_inline(
             message = _link_problem(str(child.attrGet("href") or ""))
         elif child.type == "image":
             message = _image_problem(str(child.attrGet("src") or ""), result.media_ids)
+            # The alt text is parsed too: a link or HTML inside it counts.
+            _check_children(child.children or [], line, result)
         if message:
             result.problems.append(Problem(line, message))

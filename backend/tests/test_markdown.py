@@ -116,6 +116,18 @@ def test_a_malformed_video_directive_is_a_problem(line: str) -> None:
     assert messages(line)
 
 
+def test_a_link_or_html_inside_image_alt_text_is_checked_too() -> None:
+    assert messages("![[a](javascript:x)](media:m1)")
+    assert messages("![a <b>x</b>](media:m1)")
+
+
+def test_a_repeated_video_attribute_is_a_problem() -> None:
+    # A client that kept the first value would see an id nothing validated.
+    assert messages('::video{media="a1" media="b2"}')
+    assert messages('::video{media="a1" poster="p1" poster="p2"}')
+    assert messages('::video{media="a1" loop loop}')
+
+
 def test_a_pathological_video_directive_is_refused_quickly() -> None:
     # Exponential backtracking in the attribute pattern made this take minutes.
     start = time.monotonic()

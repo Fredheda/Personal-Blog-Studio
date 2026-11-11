@@ -212,6 +212,17 @@ def test_another_posts_slug_is_taken(svc: PostService) -> None:
         svc.publish(other, if_match=svc.get(other).body_etag)
 
 
+def test_a_half_written_first_publish_does_not_lock_the_slug(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    pid = ready(svc)
+    # A first publish that died after the body but before meta.json.
+    store.write(layout.PUBLISHED, f"posts/{pid}/v1/post.md", b"x")
+    d = svc.get(pid)
+    renamed = svc.update_meta(pid, MetaPatch(slug="other"), if_match=d.meta_etag)
+    assert renamed.meta.slug == "other"
+
+
 def test_slug_is_locked_after_first_publish(svc: PostService) -> None:
     pid = ready(svc)
     svc.publish(pid, if_match=svc.get(pid).body_etag)
