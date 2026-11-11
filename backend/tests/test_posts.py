@@ -37,6 +37,12 @@ def svc(store: InMemoryBlobStore) -> PostService:
     return PostService(store, clock=Clock())
 
 
+def published_bytes(store: InMemoryBlobStore, path: str) -> bytes:
+    blob = store.read(layout.PUBLISHED, path)
+    assert blob is not None, path
+    return blob.content
+
+
 def ready(svc: PostService, slug: str = "hello", body: str = "Hello **world**.") -> str:
     d = svc.create("Hello")
     d = svc.update_meta(
@@ -155,9 +161,7 @@ def test_publish_writes_snapshot_slug_and_index_in_that_order(
         "index.json",
     ]
     assert meta.version == 1 and meta.reading_time_minutes == 1
-    assert store.read(layout.PUBLISHED, f"posts/{pid}/v1/post.md").content == (
-        b"Hello **world**."
-    )
+    assert published_bytes(store, f"posts/{pid}/v1/post.md") == b"Hello **world**."
 
 
 def test_publish_copies_media_and_records_descriptors(
@@ -172,7 +176,7 @@ def test_publish_copies_media_and_records_descriptors(
     )
     meta = svc.publish(pid, if_match=svc.get(pid).body_etag)
     assert [m.id for m in meta.media] == ["m1"]
-    assert store.read(layout.PUBLISHED, meta.media[0].blob_path).content == b"PNG"
+    assert published_bytes(store, meta.media[0].blob_path) == b"PNG"
 
 
 def test_publish_with_unknown_media_changes_nothing(
@@ -195,10 +199,8 @@ def test_republish_adds_a_version_keeps_published_at_and_replaces_the_index_entr
     second = svc.publish(pid, if_match=svc.get(pid).body_etag)
     assert second.version == 2 and second.published_at == first.published_at
     assert second.updated_at > first.updated_at
-    assert store.read(layout.PUBLISHED, f"posts/{pid}/v1/post.md").content == (
-        b"Hello **world**."
-    )
-    index = store.read(layout.PUBLISHED, layout.INDEX).content.decode()
+    assert published_bytes(store, f"posts/{pid}/v1/post.md") == b"Hello **world**."
+    index = published_bytes(store, layout.INDEX).decode()
     assert index.count(pid) == 1 and '"version": 2' in index
 
 
@@ -232,7 +234,7 @@ def test_index_update_retries_on_a_concurrent_change(store: InMemoryBlobStore) -
 
     store.read = racing_read  # type: ignore[method-assign]
     svc.publish(pid, if_match=svc.get(pid).body_etag)
-    assert pid in store.read(layout.PUBLISHED, layout.INDEX).content.decode()
+    assert pid in published_bytes(store, layout.INDEX).decode()
 
 
 def test_unpublish_removes_index_and_slug_but_keeps_versions(
@@ -242,7 +244,7 @@ def test_unpublish_removes_index_and_slug_but_keeps_versions(
     svc.publish(pid, if_match=svc.get(pid).body_etag)
     svc.unpublish(pid)
     assert store.read(layout.PUBLISHED, "slugs/hello.json") is None
-    assert pid not in store.read(layout.PUBLISHED, layout.INDEX).content.decode()
+    assert pid not in published_bytes(store, layout.INDEX).decode()
     assert store.read(layout.PUBLISHED, f"posts/{pid}/v1/post.md") is not None
     svc.unpublish(pid)  # idempotent
 
