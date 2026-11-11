@@ -1,0 +1,5 @@
+# Azurite's public development key, spelled out in one earlier commit of the
+# storage PR and removed in the next commit. Not a secret; this fingerprint
+# stops the history scan flagging that commit. Delete this file once the PR's
+# commits are squashed away.
+9a16a5fd55017e541f823f14b8a5b8a0d4ada705:DEPLOYMENT.md:generic-api-key:67

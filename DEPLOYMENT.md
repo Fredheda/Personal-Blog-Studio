@@ -57,6 +57,20 @@ Limits: the registry is in legacy permission mode, so pushes cannot be scoped pe
 - `az bicep build --file infra/main.bicep --stdout >/dev/null`: compiles the template locally, no login.
 - `shellcheck -x -P SCRIPTDIR scripts/*.sh scripts/lib/*.sh infra/deploy.sh`.
 
+### Storage tests against Azurite
+
+Start Azurite (local only) on its default ports, run the contract against it, stop it. `UseDevelopmentStorage=true` is the SDK's shorthand for Azurite's built-in development account, so no key is written down here (a spelled-out key trips the secret scan even though it is public).
+
+```bash
+mkdir -p /tmp/azurite-blog && npx -y azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog &
+cd backend
+export AZURITE_CONNECTION_STRING="UseDevelopmentStorage=true"
+poetry run pytest tests/test_store_contract.py -q   # expect 20 passed
+lsof -ti :10000 | xargs kill
+```
+
+CI does not run Azurite; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change.
+
 ## Gotchas
 
 - **Bicep `ingress` is authoritative.** The custom domain is declared in `main.bicep` from `BLOG_WEB_CUSTOM_DOMAIN` and `BLOG_WEB_CERTIFICATE_NAME` (written by `bind-domain.sh`). A deploy without them while a domain is bound would unbind it, so `deploy.sh` refuses it. The CNAME must point directly at the app's generated hostname (never a proxy), and a CAA record on the zone, if one is ever added, must allow `digicert.com`; otherwise the managed certificate is not issued or renewed.
