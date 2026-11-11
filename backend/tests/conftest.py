@@ -223,9 +223,13 @@ case "$*" in
   "identity federated-credential show"*)
     ident=$(echo "$*" | sed -E 's/.*--identity-name ([^ ]+).*/\1/')
     cred=$(echo "$*" | sed -E 's/.*--name ([^ ]+).*/\1/')
-    [ -f "$FAKE_LOG.state/cred-$ident-$cred" ] && exit 0
-    case ",${FAKE_HAS_CRED:-}," in *",$ident/$cred,"*) exit 0 ;; esac
-    exit 1 ;;
+    exists=0
+    [ -f "$FAKE_LOG.state/cred-$ident-$cred" ] && exists=1
+    case ",${FAKE_HAS_CRED:-}," in *",$ident/$cred,"*) exists=1 ;; esac
+    [ "$exists" = 1 ] || exit 1
+    # FAKE_CRED_SUBJECT: the subject an existing credential trusts.
+    case "$*" in *"--query subject"*) echo "${FAKE_CRED_SUBJECT:-repo:Fredheda@77542239/Personal-Blog-Studio@1450352278:environment:production}" ;; esac
+    exit 0 ;;
   "identity federated-credential create"*)
     ident=$(echo "$*" | sed -E 's/.*--identity-name ([^ ]+).*/\1/')
     cred=$(echo "$*" | sed -E 's/.*--name ([^ ]+).*/\1/')
@@ -419,11 +423,16 @@ esac
 # `api ... --input -` goes to $FAKE_LOG.gh-input and the value of `secret set NAME`
 # to $FAKE_LOG.secret-NAME (read both with FakeAz.side_file). FAKE_OWNER_ID: the
 # user id printed for `api users/...` (default 4242). FAKE_POLICY_NAMES: the
-# environment's existing branch policies, one per line.
+# environment's existing branch policies, one per line. FAKE_SUB_PREFIX: what
+# `api repos/.../actions/oidc/customization/sub --jq` prints (the repo's OIDC subject
+# prefix); set it empty to model a repo without one.
 FAKE_GH = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_LOG.gh"
 case "$*" in
   "api users/"*) echo "${FAKE_OWNER_ID:-4242}"; exit 0 ;;
+  "api repos/"*"/actions/oidc/customization/sub"*)
+    # FAKE_SUB_PREFIX: the repo's sub_claim_prefix (default: GitHub's immutable form).
+    printf '%s' "${FAKE_SUB_PREFIX-repo:Fredheda@77542239/Personal-Blog-Studio@1450352278}"; exit 0 ;;
   *"deployment-branch-policies"*)
     case "$*" in *"-X POST"*) exit 0 ;; esac
     printf '%s' "${FAKE_POLICY_NAMES:-}"; exit 0 ;;

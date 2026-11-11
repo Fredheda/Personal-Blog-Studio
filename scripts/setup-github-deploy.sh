@@ -19,7 +19,10 @@
 #                that uses a user-assigned identity needs assign/action on it)
 #   3. One federated credential on each identity, trusting only jobs that run in
 #      the `production` environment of this repo (Deploy logs in twice, as build
-#      and then as deploy).
+#      and then as deploy). The subject is read from the repo's OIDC setting
+#      (immutable form when the repo uses it). A credential that already exists
+#      with another subject stops the script (dry run included); it is never
+#      rewritten here.
 #   4. The `production` GitHub environment: only the main branch may deploy, the
 #      owner is the required reviewer, admins cannot bypass. (The deploy identity
 #      trusts any job in that environment on any branch, and the main-only check
@@ -44,7 +47,6 @@ BUILD_ID="id-blogstudio-gh-build"
 DEPLOY_ID="id-blogstudio-gh-deploy"
 ATTACHED_IDS=(id-blogstudio-acrpull id-blogstudio-web id-blogstudio-api id-blogapi)
 ISSUER=https://token.actions.githubusercontent.com
-SUBJECT="repo:$GH_REPO:environment:production"
 
 APPLY=0
 case "${1:-}" in
@@ -63,6 +65,30 @@ for entry in "${IMAGES[@]}"; do
   apps+=("$app")
 done
 
+# The subject GitHub puts in the OIDC token. A repo may use the immutable form
+# (repo:<owner>@<owner id>/<name>@<repo id>), which the repo's sub_claim_prefix
+# gives; otherwise it is repo:<owner>/<name>. Reading it from GitHub, not
+# building it by hand, is what keeps the credential and the token in step.
+SUB_PREFIX=$(gh api "repos/$GH_REPO/actions/oidc/customization/sub" --jq '.sub_claim_prefix // ""')
+if [ -z "$SUB_PREFIX" ]; then
+  SUB_PREFIX="repo:$GH_REPO"
+elif ! [[ "$SUB_PREFIX" =~ ^repo:[^:[:space:]]+$ ]]; then
+  echo "ERROR: unexpected sub_claim_prefix '$SUB_PREFIX' (expected repo:<owner>[@id]/<name>[@id])." >&2
+  exit 1
+fi
+SUBJECT="$SUB_PREFIX:environment:production"
+
+# An existing credential with another subject can never match a token. Stop
+# before any write; the owner changes it with
+# `az identity federated-credential update`.
+for id in "$BUILD_ID" "$DEPLOY_ID"; do
+  if existing=$(az identity federated-credential show -g "$RG" --identity-name "$id" \
+    --name github-production --query subject -o tsv 2>/dev/null) && [ "$existing" != "$SUBJECT" ]; then
+    echo "ERROR: MISMATCH: credential $id/github-production trusts '$existing' but GitHub presents '$SUBJECT'." >&2
+    exit 1
+  fi
+done
+
 if [ "$APPLY" -ne 1 ]; then
   for id in "$BUILD_ID" "$DEPLOY_ID"; do
     if az identity show -g "$RG" -n "$id" -o none 2>/dev/null; then state=exists; else state=missing; fi
@@ -70,7 +96,7 @@ if [ "$APPLY" -ne 1 ]; then
   done
   echo "  build roles:  AcrPush, Container Registry Tasks Contributor on $ACR"
   echo "  deploy roles: AcrPush on $ACR; Container Apps Contributor on ${apps[*]}; Managed Identity Operator on ${ATTACHED_IDS[*]}"
-  echo "  federated credential github-production on both identities, subject $SUBJECT"
+  echo "  federated credential github-production on both identities, subject $SUBJECT (repo prefix $SUB_PREFIX; an existing credential must already match)"
   echo "  GitHub environment production: main branch only, required reviewer $OWNER, admins cannot bypass"
   echo "  repo secrets: AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_BUILD_CLIENT_ID, AZURE_DEPLOY_CLIENT_ID"
   echo "Dry run: nothing was changed. Re-run with --apply (the owner's yes) to do the above."
