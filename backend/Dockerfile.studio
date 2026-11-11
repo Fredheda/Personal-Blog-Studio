@@ -1,6 +1,5 @@
 # Studio API image. Build context is backend/: `docker build -f Dockerfile.studio .`
-# Contains blog_core and studio_api only. Studio-only dependencies join a
-# separate Poetry group in the ticket that adds them.
+# Contains blog_core and studio_api. The studio group (Markdown parser) is installed here only.
 FROM python:3.13-slim AS builder
 
 WORKDIR /app
@@ -9,7 +8,7 @@ RUN pip install --no-cache-dir "poetry>=2.0,<3.0" \
     && poetry config virtualenvs.in-project true
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry install --only main --no-interaction --no-ansi
+RUN poetry install --only main,studio --no-interaction --no-ansi
 
 FROM python:3.13-slim
 
