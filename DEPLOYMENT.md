@@ -59,14 +59,14 @@ Limits: the registry is in legacy permission mode, so pushes cannot be scoped pe
 
 ### Storage tests against Azurite
 
-Start Azurite (local only), run the contract against it, stop it. The key below is Azurite's public development key, not a secret.
+Start Azurite (local only) on its default ports, run the contract against it, stop it. `UseDevelopmentStorage=true` is the SDK's shorthand for Azurite's built-in development account, so no key is written down here (a spelled-out key trips the secret scan even though it is public).
 
 ```bash
-mkdir -p /tmp/azurite-blog && npx -y azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog --blobHost 127.0.0.1 --blobPort 10100 --queueHost 127.0.0.1 --queuePort 10101 --tableHost 127.0.0.1 --tablePort 10102 &
+mkdir -p /tmp/azurite-blog && npx -y azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog &
 cd backend
-export AZURITE_CONNECTION_STRING="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10100/devstoreaccount1;"
+export AZURITE_CONNECTION_STRING="UseDevelopmentStorage=true"
 poetry run pytest tests/test_store_contract.py -q   # expect 20 passed
-lsof -ti :10100 | xargs kill
+lsof -ti :10000 | xargs kill
 ```
 
 CI does not run Azurite; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change.
