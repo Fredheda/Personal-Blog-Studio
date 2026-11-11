@@ -11,6 +11,7 @@ Status: backend and frontend skeletons (health endpoints, Dockerfiles, CI). The 
 ## Repo setup
 
 - CI: `.github/workflows/ci.yml` (`workflow-lint`, `backend-test`, `backend-lint`, `frontend-test`, `frontend-checks`) on pull requests; run `./scripts/ci-local.sh` before opening for review.
+- Security: `.github/workflows/security.yml` (secret scan, Python scan, dependency audits, CodeQL) and `.github/dependabot.yml`; see `CLAUDE.md`.
 - AI PR review: `.github/workflows/claude-review.yml`, secret `CLAUDE_CODE_OAUTH_TOKEN`.
 - `main` accepts changes through pull requests only.
 - Azure: `DEPLOYMENT.md` (Bicep in `infra/`, image and storage scripts in `scripts/`). The infrastructure code, the Entra setup scripts and the custom-domain script exist; the studio and the read API are deployed (the studio also on its own domain); code deploys by the manual Deploy workflow, see `DEPLOYMENT.md`.
