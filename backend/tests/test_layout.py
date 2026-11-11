@@ -77,7 +77,7 @@ def test_a_bad_revision_raises(bad: str) -> None:
         layout.revision_body(P, bad)
 
 
-@pytest.mark.parametrize("bad", [0, -1])
+@pytest.mark.parametrize("bad", [0, -1, True, 1.5])
 def test_a_bad_version_raises(bad: int) -> None:
     with pytest.raises(ValueError):
         layout.version_body(P, bad)

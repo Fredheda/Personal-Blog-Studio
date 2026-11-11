@@ -124,7 +124,9 @@ class PublishedMeta(CamelModel):
     reading_time_minutes: int
     cover_media_id: str | None = None
     media: list[MediaDescriptor] = []
-    audio: None = None  # read-aloud is out of v1; the field stays for later
+    # Read-aloud is out of v1 and nothing writes this; a later release may store
+    # an object here, which today's readers must still load.
+    audio: dict | None = None
 
 
 class IndexEntry(CamelModel):

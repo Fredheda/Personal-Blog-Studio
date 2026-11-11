@@ -85,6 +85,11 @@ def test_published_documents_round_trip_with_camel_case_keys() -> None:
         raw["readingTimeMinutes"] == 3 and raw["audio"] is None and raw["media"] == []
     )
     entry = IndexEntry(**meta.model_dump(exclude={"media", "audio"}))
+    # A later release may store an audio object; today's readers must still load it.
+    with_audio = PublishedMeta.model_validate_json(
+        json.dumps({**raw, "audio": {"durationSec": 12.5, "bytes": 3}})
+    )
+    assert with_audio.audio == {"durationSec": 12.5, "bytes": 3}
     assert (
         json.loads(PublishedIndex(items=[entry]).dump())["items"][0]["hasAudio"]
         is False

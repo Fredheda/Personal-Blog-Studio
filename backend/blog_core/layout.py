@@ -80,7 +80,7 @@ def versions_prefix(post_id: str) -> str:
 
 
 def _version(post_id: str, version: int) -> str:
-    if version < 1:
+    if type(version) is not int or version < 1:  # bool and float are not versions
         raise ValueError(f"not a version: {version!r}")
     return f"posts/{_post(post_id)}/v{version}"
 
