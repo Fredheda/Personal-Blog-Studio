@@ -1,0 +1,70 @@
+# Weekly version updates. Alerts and security updates are repo settings, not
+# configured here. `cooldown` makes Dependabot wait 14 days after a release
+# before it proposes it, which keeps freshly published (possibly compromised)
+# versions out. Each ecosystem groups its minor and patch updates into one PR
+# per run (fewer PRs, fewer CI runs); major updates stay separate PRs so each
+# gets its own review. Dependabot PRs get no repo secrets, so the AI review
+# skips them. Poetry projects use the `pip` ecosystem.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    cooldown:
+      default-days: 14
+    groups:
+      pip-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    cooldown:
+      default-days: 14
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    cooldown:
+      default-days: 14
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # The runtimes are pinned on purpose: Node 24 (npm 12 needs it) and Python
+  # 3.13 (backend/.python-version, pyproject.toml). The images use floating
+  # minor tags, so patch releases arrive at build time, not through Dependabot.
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    cooldown:
+      default-days: 14
+    groups:
+      docker-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

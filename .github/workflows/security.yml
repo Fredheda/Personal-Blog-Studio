@@ -1,0 +1,132 @@
+name: Security
+
+# Pull requests and a weekly run; a merge to main starts nothing. gitleaks runs
+# on every push to a PR, draft or not. The other scans run when the PR is
+# marked ready, on the weekly schedule and on demand
+# (`gh workflow run security.yml --ref main`). Linting the workflow files is the
+# workflow-lint job of ci.yml and is not repeated here. gitleaks and bandit are
+# meant to be required checks on main (added to the ruleset after their first
+# green run); the audits and codeql are advisory.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  # Advisories appear without any code change, so the dependency audits also
+  # run weekly.
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+# A new push to the same PR cancels the run that is still going. Scheduled and
+# manual runs are never cancelled.
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Blocks the PR. Runs the pinned gitleaks image directly: the gitleaks
+  # action needs a license key for organization repos.
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # PRs scan only the commits they add; the weekly and manual runs scan the
+      # whole history.
+      - name: Scan for secrets
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          log_opts=()
+          if [ "$EVENT" = "pull_request" ]; then
+            log_opts=(--log-opts="${BASE_SHA}..${HEAD_SHA}")
+          fi
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --redact --no-banner --verbose "${log_opts[@]}"
+
+  # Blocks the PR. HIGH severity only: bandit's lower levels are mostly noise.
+  bandit:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: backend/.python-version
+      # Same interpreter as the code under scan, not pipx's default.
+      - run: pipx run --python "$(which python)" bandit==1.9.4 -r backend/blog_core backend/studio_api backend/blog_api -lll
+
+  # Advisory on PRs (a new advisory against an old dependency must not fail an
+  # unrelated PR); the weekly run fails visibly.
+  pip-audit:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Poetry
+        run: pipx install "poetry>=2.0,<3.0"
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: backend/.python-version
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+      - run: poetry install --no-interaction
+      - run: poetry run pip install pip-audit==2.10.1
+      - name: Audit the Poetry environment
+        run: poetry run pip-audit --local
+
+  # Advisory on PRs, red on the weekly run. Production dependencies, high
+  # severity and up; npm audit reads the lockfile, so nothing is installed.
+  npm-audit:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # The repo pins npm; match the Dockerfile and ci.yml.
+      - run: npm install -g npm@12.2.2 && npm --version
+      - run: npm audit --omit=dev --audit-level=high
+
+  # Findings appear in the repo's Security tab, not as a failing check. Dependabot
+  # PRs get a read-only token, so the upload would fail there; the weekly run
+  # covers main.
+  codeql:
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

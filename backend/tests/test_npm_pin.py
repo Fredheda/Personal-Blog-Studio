@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = ROOT / "frontend" / "Dockerfile"
-CI = ROOT / ".github" / "workflows" / "ci.yml"
+WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 PIN = re.compile(r"npm install -g npm@(\d+\.\d+\.\d+) && npm --version")
 
 
@@ -21,7 +21,7 @@ def count(path: Path, pattern: str) -> int:
 
 
 def test_one_npm_version_everywhere() -> None:
-    versions = {v for path in (DOCKERFILE, CI) for v in pins(path)}
+    versions = {v for path in (DOCKERFILE, *WORKFLOWS) for v in pins(path)}
     assert len(versions) == 1, versions
 
 
@@ -29,5 +29,9 @@ def test_every_docker_stage_pins_npm() -> None:
     assert len(pins(DOCKERFILE)) == count(DOCKERFILE, r"^FROM ") >= 2
 
 
-def test_every_node_job_pins_npm() -> None:
-    assert len(pins(CI)) == count(CI, r"uses: actions/setup-node@")
+def test_every_node_job_in_every_workflow_pins_npm() -> None:
+    assert WORKFLOWS
+    for workflow in WORKFLOWS:
+        assert len(pins(workflow)) == count(workflow, r"uses: actions/setup-node@"), (
+            workflow.name
+        )

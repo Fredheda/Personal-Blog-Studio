@@ -65,6 +65,19 @@ CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-l
 - `next dev` writes untracked `frontend/AGENTS.md` and `frontend/CLAUDE.md` when it detects an AI agent. Delete them, or start with `env -u AI_AGENT -u CLAUDECODE`.
 - `GET /healthz` (both apps) is the path Easy Auth and token validation exclude; keep it free of data.
 
+## Security checks
+
+`.github/workflows/security.yml` runs `gitleaks` on every push to a PR and `bandit` (HIGH only) once the PR is ready, plus advisory `pip-audit`, `npm-audit` and CodeQL (findings in the Security tab) on ready PRs and weekly (Mondays); `gh workflow run security.yml --ref main` runs it on demand. Workflow linting is the `workflow-lint` job of `ci.yml`. Run a check locally:
+
+| Check | Command |
+|---|---|
+| Secrets | `docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --redact --no-banner --verbose` |
+| Python, HIGH severity | `pipx run bandit==1.9.4 -r backend/blog_core backend/studio_api backend/blog_api -lll` |
+| Python dependencies | `cd backend && poetry run pip install pip-audit==2.10.1 && poetry run pip-audit --local` |
+| Frontend dependencies | `cd frontend && npm audit --omit=dev --audit-level=high` |
+
+Dependabot (`.github/dependabot.yml`) opens weekly PRs: one grouped PR per ecosystem for minor and patch updates, majors separate, only releases older than 14 days; the Node 24 and Python 3.13 images are left to hand. Alerts and security updates are repo settings. Dependabot PRs get no secrets, so the AI review skips them.
+
 ## AI PR review
 
 `.github/workflows/claude-review.yml` reviews each PR once it is ready, on later pushes, and when the owner comments `@claude`. Secret: `CLAUDE_CODE_OAUTH_TOKEN` (repo secret; expires about 2027-11). Fallback if subscription auth is refused: use `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}` in both jobs. Fork and Dependabot PRs are skipped. Do not require the `Claude Review` job as a status check: it skips on PRs that change the workflow file.
