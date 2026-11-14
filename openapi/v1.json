@@ -1,0 +1,115 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Blog read API",
+    "version": "1.0.0",
+    "description": "Read-only access to published posts. Every endpoint except /healthz needs an Entra access token with the Blog.Read role. Additive changes only inside v1; clients must ignore unknown fields."
+  },
+  "paths": {
+    "/v1/posts": {
+      "get": {
+        "summary": "List published posts, newest first",
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}},
+          {"name": "cursor", "in": "query", "schema": {"type": "string"}, "description": "Opaque; pass nextCursor from the previous page."},
+          {"name": "tag", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of posts.",
+            "headers": {"ETag": {"schema": {"type": "string"}}, "Cache-Control": {"schema": {"type": "string", "const": "private, max-age=60"}}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PostList"}, "examples": {"default": {"value": {
+              "items": [
+                {"postId": "01JB8ZK3M4N5P6Q7R8S9T0V1W2", "slug": "least-squares-by-hand", "title": "Least squares by hand", "summary": "Fitting a line with nothing but the normal equations.", "tags": ["maths", "python"], "publishedAt": "2026-11-09T18:30:00Z", "updatedAt": "2026-11-10T08:15:00Z", "readingTimeMinutes": 7, "coverMediaId": "cover-1", "hasAudio": false},
+                {"postId": "01JB7Y2A3B4C5D6E7F8G9H0J1K", "slug": "hello-world", "title": "Hello, world", "summary": "Why this blog exists.", "tags": [], "publishedAt": "2026-11-01T09:00:00Z", "updatedAt": "2026-11-01T09:00:00Z", "readingTimeMinutes": 1, "coverMediaId": null, "hasAudio": false}
+              ],
+              "nextCursor": "eyJwIjoiMjAyNi0xMS0wMVQwOTowMDowMFoifQ"
+            }}}}}
+          },
+          "304": {"description": "Not modified (If-None-Match matched)."},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/v1/posts/{slug}": {
+      "get": {
+        "summary": "One published post with its Markdown body",
+        "parameters": [{"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {
+            "description": "The post.",
+            "headers": {"ETag": {"schema": {"type": "string"}}, "Cache-Control": {"schema": {"type": "string", "const": "private, max-age=60"}}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PostDetail"}, "examples": {"default": {"value": {
+              "postId": "01JB8ZK3M4N5P6Q7R8S9T0V1W2", "slug": "least-squares-by-hand", "title": "Least squares by hand", "summary": "Fitting a line with nothing but the normal equations.", "tags": ["maths", "python"], "publishedAt": "2026-11-09T18:30:00Z", "updatedAt": "2026-11-10T08:15:00Z", "readingTimeMinutes": 7, "coverMediaId": "cover-1", "hasAudio": false,
+              "version": 2,
+              "body": "# Least squares by hand\n\nMinimise $\\lVert Ax - b \\rVert^2$.\n\n![The fit](media:cover-1)\n\n::video{media=\"demo-1\" loop muted autoplay caption=\"The residuals shrinking\"}\n",
+              "media": [
+                {"id": "cover-1", "kind": "image", "mime": "image/png", "bytes": 48213, "width": 1200, "height": 630, "durationSec": null, "alt": "A scatter plot with a fitted line"},
+                {"id": "demo-1", "kind": "video", "mime": "video/mp4", "bytes": 1804422, "width": 960, "height": 540, "durationSec": 12.5, "alt": ""}
+              ],
+              "audio": null
+            }}}}}
+          },
+          "304": {"description": "Not modified (If-None-Match matched)."},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/v1/media/{mediaId}": {
+      "get": {
+        "summary": "Short-lived read link for one media file of a post",
+        "parameters": [
+          {"name": "mediaId", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "post", "in": "query", "required": true, "schema": {"type": "string"}, "description": "The post slug the media belongs to."}
+        ],
+        "responses": {
+          "200": {"description": "A 10-minute, read-only, HTTPS link scoped to that one blob. Cache the descriptor, never the URL.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MediaLink"}, "examples": {"default": {"value": {
+            "url": "https://example.blob.core.windows.net/blog-published/posts/01JB8ZK3M4N5P6Q7R8S9T0V1W2/v2/media/cover-1.png?sv=2025-01-05&se=2026-11-10T08:25:00Z&sr=b&sp=r&spr=https&sig=REDACTED",
+            "expiresAt": "2026-11-10T08:25:00Z", "contentType": "image/png", "bytes": 48213
+          }}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/v1/posts/{slug}/audio": {
+      "get": {
+        "summary": "Read-aloud audio link (not produced in v1; always 404 until it ships)",
+        "parameters": [{"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {"description": "Same shape as media, plus durationSec.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AudioLink"}, "examples": {"default": {"value": {
+            "url": "https://example.blob.core.windows.net/blog-published/posts/01JB8ZK3M4N5P6Q7R8S9T0V1W2/v2/audio.mp3?sv=2025-01-05&se=2026-11-10T08:25:00Z&sr=b&sp=r&spr=https&sig=REDACTED",
+            "expiresAt": "2026-11-10T08:25:00Z", "contentType": "audio/mpeg", "bytes": 3201120, "durationSec": 400.1
+          }}}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "Liveness; no authentication, returns no data",
+        "security": [],
+        "responses": {"200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"status": {"type": "string"}}}, "examples": {"default": {"value": {"status": "ok"}}}}}}}
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {"entra": {"type": "http", "scheme": "bearer", "description": "Entra access token for the blog API audience; the caller needs the Blog.Read role."}},
+    "responses": {
+      "Unauthorized": {"description": "No token, or an invalid one (returned by the platform).", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}, "examples": {"default": {"value": {"type": "about:blank", "title": "Unauthorized", "status": 401, "detail": "a valid bearer token is required"}}}}}},
+      "NotFound": {"description": "No such published post or media.", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}, "examples": {"default": {"value": {"type": "about:blank", "title": "Not Found", "status": 404, "detail": "no published post with this slug"}}}}}}
+    },
+    "schemas": {
+      "Problem": {"type": "object", "required": ["type", "title", "status"], "properties": {"type": {"type": "string"}, "title": {"type": "string"}, "status": {"type": "integer"}, "detail": {"type": "string"}}},
+      "PostSummary": {"type": "object", "required": ["postId", "slug", "title", "summary", "tags", "publishedAt", "updatedAt", "readingTimeMinutes", "coverMediaId", "hasAudio"], "properties": {"postId": {"type": "string"}, "slug": {"type": "string"}, "title": {"type": "string"}, "summary": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "publishedAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}, "readingTimeMinutes": {"type": "integer"}, "coverMediaId": {"type": ["string", "null"]}, "hasAudio": {"type": "boolean"}}},
+      "PostList": {"type": "object", "required": ["items", "nextCursor"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/PostSummary"}}, "nextCursor": {"type": ["string", "null"]}}},
+      "MediaDescriptor": {"type": "object", "required": ["id", "kind", "mime", "bytes"], "properties": {"id": {"type": "string"}, "kind": {"enum": ["image", "video"]}, "mime": {"type": "string"}, "bytes": {"type": "integer"}, "width": {"type": ["integer", "null"]}, "height": {"type": ["integer", "null"]}, "durationSec": {"type": ["number", "null"]}, "alt": {"type": "string"}}},
+      "PostDetail": {"allOf": [{"$ref": "#/components/schemas/PostSummary"}, {"type": "object", "required": ["body", "version", "media", "audio"], "properties": {"body": {"type": "string", "description": "Markdown with $...$ maths and the ::video directive; media:<id> targets resolve through /v1/media."}, "version": {"type": "integer"}, "media": {"type": "array", "items": {"$ref": "#/components/schemas/MediaDescriptor"}}, "audio": {"type": ["object", "null"], "description": "Always null in v1."}}}]},
+      "MediaLink": {"type": "object", "required": ["url", "expiresAt", "contentType", "bytes"], "properties": {"url": {"type": "string"}, "expiresAt": {"type": "string", "format": "date-time"}, "contentType": {"type": "string"}, "bytes": {"type": "integer"}}},
+      "AudioLink": {"allOf": [{"$ref": "#/components/schemas/MediaLink"}, {"type": "object", "required": ["durationSec"], "properties": {"durationSec": {"type": "number"}}}]}
+    }
+  },
+  "security": [{"entra": []}]
+}
