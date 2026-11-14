@@ -115,6 +115,69 @@ def test_a_chunked_body_stops_being_read_past_the_cap() -> None:
     assert reads["n"] == MAX_REQUEST_BYTES // 65536 + 1  # 17 reads, not 40
 
 
+def test_a_chunked_oversize_body_is_413_on_a_route_with_a_body_model() -> None:
+    # FastAPI turns an exception raised while it parses a body parameter into a
+    # 400; the limit must still answer 413.
+    from pydantic import BaseModel
+
+    class Payload(BaseModel):
+        text: str
+
+    app, _ = make_app()
+    calls = {"n": 0}
+
+    @app.post("/model")
+    def model(payload: Payload) -> dict:
+        calls["n"] += 1
+        return {"n": len(payload.text)}
+
+    def chunks():
+        for _ in range(3 * MAX_REQUEST_BYTES // 65536):
+            yield b"x" * 65536
+
+    response = TestClient(app).post("/model", content=chunks())
+    assert is_problem(response, 413)
+    assert calls["n"] == 0
+
+
+def test_a_handler_that_swallows_the_abort_still_cannot_answer_200() -> None:
+    app, _ = make_app()
+
+    @app.post("/swallow")
+    async def swallow(request: Request) -> dict:
+        try:
+            await request.body()
+        except Exception:
+            pass
+        return {"ok": True}
+
+    def chunks():
+        for _ in range(3 * MAX_REQUEST_BYTES // 65536):
+            yield b"x" * 65536
+
+    assert is_problem(TestClient(app).post("/swallow", content=chunks()), 413)
+
+
+def test_headers_passed_by_an_exception_cannot_corrupt_the_problem_body() -> None:
+    app, _ = make_app()
+
+    @app.get("/bad-headers")
+    def bad_headers() -> None:
+        raise HTTPException(
+            409,
+            headers={
+                "content-length": "3",
+                "content-type": "text/plain",
+                "x-kept": "y",
+            },
+        )
+
+    response = TestClient(app).get("/bad-headers")
+    assert is_problem(response, 409)
+    assert response.headers["x-kept"] == "y"
+    assert response.json()["title"] == "Conflict"
+
+
 def test_a_request_without_a_body_is_not_affected() -> None:
     app, _ = make_app()
     assert TestClient(app).get("/healthz").json() == {"status": "ok"}

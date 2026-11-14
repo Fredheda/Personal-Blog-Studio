@@ -44,19 +44,31 @@ class BodyLimit:
             return
 
         seen = 0
-        started = False
+        started = False  # the app began a response before the body overflowed
+        overflow = False
+        answered = False  # our 413 has been sent
 
         async def limited_receive() -> Message:
-            nonlocal seen
+            nonlocal seen, overflow
             message = await receive()
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
                 if seen > self.max_bytes:
+                    overflow = not started
                     raise _TooLarge
             return message
 
         async def tracking_send(message: Message) -> None:
-            nonlocal started
+            nonlocal started, answered
+            if overflow:
+                # FastAPI turns an exception raised while it parses a body into
+                # its own 400 (and a handler may swallow it and answer 200): the
+                # answer to an oversize body is always our 413, and the app's own
+                # response messages are dropped.
+                if not answered:
+                    answered = True
+                    await self._refuse(scope, receive, send)
+                return
             if message["type"] == "http.response.start":
                 started = True
             await send(message)
@@ -66,6 +78,8 @@ class BodyLimit:
         except _TooLarge:
             if started:
                 raise
+        if overflow and not answered:
+            answered = True
             await self._refuse(scope, receive, send)
 
 
@@ -92,7 +106,15 @@ def create_base_app(title: str, *, openapi_url: str | None = None) -> FastAPI:
             title_text = HTTPStatus(e.status_code).phrase
         except ValueError:
             title_text = "Error"
-        return problem(e.status_code, title_text, headers=dict(e.headers or {}))
+        # Framing headers are the response's own business: a raiser that passes
+        # content-length or content-type must not corrupt the problem body.
+        kept = {
+            name: value
+            for name, value in (e.headers or {}).items()
+            if name.lower()
+            not in {"content-length", "content-type", "transfer-encoding"}
+        }
+        return problem(e.status_code, title_text, headers=kept)
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

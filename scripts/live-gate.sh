@@ -8,7 +8,8 @@
 #   2. an authenticated but unapproved caller is rejected: Entra refuses it a
 #      token (assignment required), or the API answers 401/403
 #   3. the approved caller succeeds: a 2xx, or the app's own 404 body
-#      {"detail":"Not Found"} (until BLOG-18 adds /v1/posts, then 200). An
+#      ({"detail":"Not Found"} or the factory's problem+json; until BLOG-18 adds
+#      /v1/posts, then 200). An
 #      ingress 404 for a stopped or missing app has another body and fails.
 #
 # Needs the IDs setup-api-auth.sh wrote to .env and a deployed read API. Default
@@ -153,9 +154,11 @@ else
   case "$code" in
     2??) pass "3 approved caller reached the app (HTTP $code)" ;;
     404)
-      # FastAPI's own 404 proves the request passed authentication and reached
-      # the app. An ingress 404 (stopped or missing app) has another body.
-      if [ "$body" = '{"detail":"Not Found"}' ]; then
+      # The app's own 404 proves the request passed authentication and reached
+      # the app: FastAPI's {"detail":"Not Found"}, or the problem+json the shared
+      # app factory sends. An ingress 404 (stopped or missing app) has another body.
+      if [ "$body" = '{"detail":"Not Found"}' ] ||
+        [ "$body" = '{"type":"about:blank","title":"Not Found","status":404}' ]; then
         pass "3 approved caller reached the app (the app's own 404, no /v1/posts yet)"
       else
         failed "3 approved caller got a 404 that did not come from the app (is ca-blogapi running?)"
