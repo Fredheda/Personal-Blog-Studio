@@ -6,7 +6,7 @@ Blog authoring studio and blog read API (not public: approved callers with an En
 - **Read API:** versioned (`v1`), documented with OpenAPI, not public. Clients are separate apps.
 - **Storage:** posts, media and audio live in private Azure storage, never in this repo.
 
-Status: the backend has the content model, blob storage layer, studio post service and studio post routes; the frontend is a skeleton (home page only); Dockerfiles, CI, deploy and security workflows exist. The system design is the workspace spec `2026-11-08-blog-studio.md`; the editor and the read API routes are not built yet (`openapi/v1.json` is the read API contract).
+Status: the backend has the content model, blob storage layer, studio post service and studio post routes; the studio frontend lists, creates, edits and publishes posts with a plain Markdown textarea, through a proxy to the studio API; Dockerfiles, CI, deploy and security workflows exist. The system design is the workspace spec `2026-11-08-blog-studio.md`; the WYSIWYG editor (BLOG-30) and the read API routes are not built yet (`openapi/v1.json` is the read API contract).
 
 ## Repo setup
 
