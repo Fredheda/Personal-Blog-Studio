@@ -27,7 +27,9 @@
             }}}}}
           },
           "304": {"description": "Not modified (If-None-Match matched)."},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
         }
       }
     },
@@ -52,6 +54,7 @@
           },
           "304": {"description": "Not modified (If-None-Match matched)."},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {"$ref": "#/components/responses/NotFound"}
         }
       }
@@ -68,7 +71,9 @@
             "url": "https://example.blob.core.windows.net/blog-published/posts/01JB8ZK3M4N5P6Q7R8S9T0V1W2/v2/media/cover-1.png?sv=2025-01-05&se=2026-11-10T08:25:00Z&sr=b&sp=r&spr=https&sig=REDACTED",
             "expiresAt": "2026-11-10T08:25:00Z", "contentType": "image/png", "bytes": 48213
           }}}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {"$ref": "#/components/responses/NotFound"}
         }
       }
@@ -83,6 +88,7 @@
             "expiresAt": "2026-11-10T08:25:00Z", "contentType": "audio/mpeg", "bytes": 3201120, "durationSec": 400.1
           }}}}}},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {"$ref": "#/components/responses/NotFound"}
         }
       }
@@ -98,6 +104,8 @@
   "components": {
     "securitySchemes": {"entra": {"type": "http", "scheme": "bearer", "description": "Entra access token for the blog API audience; the caller needs the Blog.Read role."}},
     "responses": {
+      "Forbidden": {"description": "The caller lacks the Blog.Read role.", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}, "examples": {"default": {"value": {"type": "about:blank", "title": "Forbidden", "status": 403, "detail": "the caller is not approved for this API"}}}}}},
+      "BadRequest": {"description": "A query or path parameter is not valid.", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}, "examples": {"default": {"value": {"type": "about:blank", "title": "Bad Request", "status": 400, "detail": "a query or path parameter is not valid"}}}}}},
       "Unauthorized": {"description": "No token, or an invalid one (returned by the platform).", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}, "examples": {"default": {"value": {"type": "about:blank", "title": "Unauthorized", "status": 401, "detail": "a valid bearer token is required"}}}}}},
       "NotFound": {"description": "No such published post or media.", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}, "examples": {"default": {"value": {"type": "about:blank", "title": "Not Found", "status": 404, "detail": "no published post with this slug"}}}}}}
     },
@@ -106,7 +114,7 @@
       "PostSummary": {"type": "object", "required": ["postId", "slug", "title", "summary", "tags", "publishedAt", "updatedAt", "readingTimeMinutes", "coverMediaId", "hasAudio"], "properties": {"postId": {"type": "string"}, "slug": {"type": "string"}, "title": {"type": "string"}, "summary": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "publishedAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}, "readingTimeMinutes": {"type": "integer"}, "coverMediaId": {"type": ["string", "null"]}, "hasAudio": {"type": "boolean"}}},
       "PostList": {"type": "object", "required": ["items", "nextCursor"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/PostSummary"}}, "nextCursor": {"type": ["string", "null"]}}},
       "MediaDescriptor": {"type": "object", "required": ["id", "kind", "mime", "bytes"], "properties": {"id": {"type": "string"}, "kind": {"enum": ["image", "video"]}, "mime": {"type": "string"}, "bytes": {"type": "integer"}, "width": {"type": ["integer", "null"]}, "height": {"type": ["integer", "null"]}, "durationSec": {"type": ["number", "null"]}, "alt": {"type": "string"}}},
-      "PostDetail": {"allOf": [{"$ref": "#/components/schemas/PostSummary"}, {"type": "object", "required": ["body", "version", "media", "audio"], "properties": {"body": {"type": "string", "description": "Markdown with $...$ maths and the ::video directive; media:<id> targets resolve through /v1/media."}, "version": {"type": "integer"}, "media": {"type": "array", "items": {"$ref": "#/components/schemas/MediaDescriptor"}}, "audio": {"type": ["object", "null"], "description": "Always null in v1."}}}]},
+      "PostDetail": {"allOf": [{"$ref": "#/components/schemas/PostSummary"}, {"type": "object", "required": ["body", "version", "media"], "properties": {"body": {"type": "string", "description": "Markdown with $...$ maths and the ::video directive; media:<id> targets resolve through /v1/media."}, "version": {"type": "integer"}, "media": {"type": "array", "items": {"$ref": "#/components/schemas/MediaDescriptor"}}, "audio": {"type": ["object", "null"], "description": "Always null in v1."}}}]},
       "MediaLink": {"type": "object", "required": ["url", "expiresAt", "contentType", "bytes"], "properties": {"url": {"type": "string"}, "expiresAt": {"type": "string", "format": "date-time"}, "contentType": {"type": "string"}, "bytes": {"type": "integer"}}},
       "AudioLink": {"allOf": [{"$ref": "#/components/schemas/MediaLink"}, {"type": "object", "required": ["durationSec"], "properties": {"durationSec": {"type": "number"}}}]}
     }
