@@ -95,6 +95,10 @@ class PublishedReader:
         folder = f"{layout.version_meta(meta.post_id, meta.version).rsplit('/', 1)[0]}/media/"
         for descriptor in meta.media:
             # The path is stored data: only sign what sits in this version's media folder.
-            if descriptor.id == media_id and descriptor.blob_path.startswith(folder):
+            name = descriptor.blob_path.removeprefix(folder)
+            inside = descriptor.blob_path.startswith(folder) and not (
+                "/" in name or ".." in name or name == ""
+            )
+            if descriptor.id == media_id and inside:
                 return published, descriptor
         return None

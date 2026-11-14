@@ -169,6 +169,35 @@ def test_if_none_match_returns_304_and_a_change_changes_the_etag(
     assert client.get("/v1/posts").headers["etag"] != etag
 
 
+def test_a_weakened_etag_from_a_proxy_still_matches(
+    client: TestClient, svc: PostService
+) -> None:
+    publish(svc, "one")
+    etag = client.get("/v1/posts").headers["etag"]
+    for value in (f"W/{etag}", f'"other", W/{etag}', "W/*"):
+        assert (
+            client.get("/v1/posts", headers={"If-None-Match": value}).status_code == 304
+        ), value
+
+
+def test_a_media_path_that_climbs_out_of_its_folder_is_never_signed(
+    client: TestClient,
+    svc: PostService,
+    store: InMemoryBlobStore,
+    linker: FakeLinker,
+) -> None:
+    add_media(store)
+    pid = publish(svc, "with-media", body="![a](media:m1)")
+    path = layout.version_meta(pid, 1)
+    blob = store.read(layout.PUBLISHED, path)
+    assert blob is not None
+    meta = json.loads(blob.content)
+    meta["media"][0]["blobPath"] = f"posts/{pid}/v1/media/../../v2/media/x.png"
+    store.write(layout.PUBLISHED, path, json.dumps(meta).encode())
+    assert client.get("/v1/media/m1?post=with-media").status_code == 404
+    assert linker.calls == []
+
+
 @pytest.mark.parametrize(
     "query",
     [

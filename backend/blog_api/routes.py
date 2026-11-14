@@ -47,7 +47,12 @@ def cached_json(request: Request, payload: dict[str, Any]) -> Response:
     ).encode()
     etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
-    wanted = [v.strip() for v in request.headers.get("if-none-match", "").split(",")]
+    # If-None-Match uses weak comparison (RFC 9110): a proxy that weakens the
+    # ETag to W/"..." must still get its 304.
+    wanted = [
+        v.strip().removeprefix("W/")
+        for v in request.headers.get("if-none-match", "").split(",")
+    ]
     if etag in wanted or "*" in wanted:
         return Response(status_code=304, headers=headers)
     return Response(body, media_type="application/json", headers=headers)

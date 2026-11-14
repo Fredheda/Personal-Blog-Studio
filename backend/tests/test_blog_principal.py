@@ -40,6 +40,13 @@ def test_a_missing_or_malformed_principal_is_401(bad: str | None) -> None:
     assert e.value.status == 401
 
 
+def test_a_deeply_nested_header_is_401_not_a_crash() -> None:
+    nested = base64.b64encode(b"[" * 100_000).decode()
+    with pytest.raises(ApiError) as e:
+        roles_from_principal(nested)
+    assert e.value.status == 401
+
+
 def make_client(required: str = "Blog.Read") -> TestClient:
     app = FastAPI()
     app.state.required_role = required

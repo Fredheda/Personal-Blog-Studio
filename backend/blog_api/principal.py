@@ -32,7 +32,7 @@ def roles_from_principal(header: str | None) -> set[str]:
         raise ApiError(401, "Unauthorized", "a valid bearer token is required")
     try:
         data = json.loads(base64.b64decode(header, validate=True))
-    except (binascii.Error, ValueError):
+    except (binascii.Error, ValueError, RecursionError):  # nesting bomb
         raise ApiError(
             401, "Unauthorized", "a valid bearer token is required"
         ) from None
