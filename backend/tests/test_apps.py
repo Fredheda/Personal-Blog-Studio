@@ -62,6 +62,14 @@ def test_apps_import_with_an_empty_environment():
 
 def test_blog_api_does_not_import_studio_code():
     loaded = _modules_after_import("blog_api.app")
-    forbidden = ("studio_api", "langgraph", "langchain", "anthropic", "elevenlabs")
+    forbidden = (
+        "studio_api",
+        "markdown_it",
+        "mdit_py_plugins",
+        "langgraph",
+        "langchain",
+        "anthropic",
+        "elevenlabs",
+    )
     top_level = {name.split(".")[0] for name in loaded}
     assert not [name for name in top_level if name.startswith(forbidden)]
