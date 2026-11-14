@@ -8,10 +8,17 @@ PROBLEM_JSON = "application/problem+json"
 
 
 def problem(
-    status: int, title: str, detail: str | None = None, **extra: Any
+    status: int,
+    title: str,
+    detail: str | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+    **extra: Any,
 ) -> JSONResponse:
     body: dict[str, Any] = {"type": "about:blank", "title": title, "status": status}
     if detail is not None:
         body["detail"] = detail
     body.update(extra)
-    return JSONResponse(body, status_code=status, media_type=PROBLEM_JSON)
+    return JSONResponse(
+        body, status_code=status, media_type=PROBLEM_JSON, headers=headers
+    )

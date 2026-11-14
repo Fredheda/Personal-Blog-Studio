@@ -102,6 +102,22 @@ def test_step_3_passes_on_a_2xx_or_the_apps_own_404(
         assert "PASS  3" in result.stdout
 
 
+def test_step_3_also_accepts_the_apps_problem_json_404(
+    fake_az: FakeAz, tmp_path: Path
+) -> None:
+    # Since the shared app factory answers unknown paths as problem+json, a
+    # deployed read API without /v1/posts yet says this instead of {"detail"}.
+    result = run(
+        fake_az,
+        tmp_path,
+        "--run",
+        FAKE_APPROVED_CODE="404",
+        FAKE_APPROVED_BODY='{"type":"about:blank","title":"Not Found","status":404}',
+    )
+    assert result.returncode == 0, result.stdout
+    assert "PASS  3" in result.stdout
+
+
 def test_step_3_fails_when_the_approved_caller_is_rejected_or_the_answer_is_odd(
     fake_az: FakeAz, tmp_path: Path
 ) -> None:

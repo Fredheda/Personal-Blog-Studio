@@ -35,10 +35,15 @@ def test_no_default_documentation_routes(client: TestClient, path: str):
     assert client.get(path).status_code == 404
 
 
-def test_unknown_path_is_a_plain_404(client: TestClient):
+def test_unknown_path_is_a_problem_json_404(client: TestClient):
     response = client.get("/nope")
     assert response.status_code == 404
-    assert response.json() == {"detail": "Not Found"}
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json() == {
+        "type": "about:blank",
+        "title": "Not Found",
+        "status": 404,
+    }
 
 
 def _modules_after_import(module: str) -> set[str]:
