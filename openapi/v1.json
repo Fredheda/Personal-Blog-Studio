@@ -17,7 +17,7 @@
         "responses": {
           "200": {
             "description": "A page of posts.",
-            "headers": {"ETag": {"schema": {"type": "string"}}},
+            "headers": {"ETag": {"schema": {"type": "string"}}, "Cache-Control": {"schema": {"type": "string", "const": "private, max-age=60"}}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PostList"}, "examples": {"default": {"value": {
               "items": [
                 {"postId": "01JB8ZK3M4N5P6Q7R8S9T0V1W2", "slug": "least-squares-by-hand", "title": "Least squares by hand", "summary": "Fitting a line with nothing but the normal equations.", "tags": ["maths", "python"], "publishedAt": "2026-11-09T18:30:00Z", "updatedAt": "2026-11-10T08:15:00Z", "readingTimeMinutes": 7, "coverMediaId": "cover-1", "hasAudio": false},
@@ -38,7 +38,7 @@
         "responses": {
           "200": {
             "description": "The post.",
-            "headers": {"ETag": {"schema": {"type": "string"}}},
+            "headers": {"ETag": {"schema": {"type": "string"}}, "Cache-Control": {"schema": {"type": "string", "const": "private, max-age=60"}}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PostDetail"}, "examples": {"default": {"value": {
               "postId": "01JB8ZK3M4N5P6Q7R8S9T0V1W2", "slug": "least-squares-by-hand", "title": "Least squares by hand", "summary": "Fitting a line with nothing but the normal equations.", "tags": ["maths", "python"], "publishedAt": "2026-11-09T18:30:00Z", "updatedAt": "2026-11-10T08:15:00Z", "readingTimeMinutes": 7, "coverMediaId": "cover-1", "hasAudio": false,
               "version": 2,

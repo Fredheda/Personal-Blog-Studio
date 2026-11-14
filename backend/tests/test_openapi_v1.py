@@ -77,6 +77,12 @@ def test_the_media_and_audio_examples_are_short_lived_https_links() -> None:
     assert set(example("/v1/posts/{slug}/audio", "200")) == LINK | {"durationSec"}
 
 
+def test_the_cached_responses_document_etag_and_cache_control() -> None:
+    for path in ("/v1/posts", "/v1/posts/{slug}"):
+        headers = response(path, "200")["headers"]
+        assert {"ETag", "Cache-Control"} <= set(headers), path
+
+
 def test_not_modified_unauthorized_and_not_found_are_documented() -> None:
     responses = DOC["paths"]["/v1/posts/{slug}"]["get"]["responses"]
     assert {"200", "304", "401", "404"} <= set(responses)

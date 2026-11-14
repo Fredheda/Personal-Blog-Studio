@@ -95,7 +95,7 @@ def post_id_param(post_id: str) -> str:
 
 
 def revision_param(revision: str) -> str:
-    if not _REVISION.match(revision):
+    if not _REVISION.fullmatch(revision):  # `$` would let a trailing newline through
         raise PostNotFound(revision)
     return revision
 

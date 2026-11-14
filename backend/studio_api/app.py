@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import Iterable
 
@@ -71,6 +72,13 @@ def create_app(
             return problem(422, "Unprocessable Content", str(e), mediaIds=e.media_ids)
         status, title = _STATUS.get(type(e), (500, "Internal Server Error"))
         return problem(status, title, str(e))
+
+    @app.exception_handler(Exception)
+    def _unexpected(_: Request, e: Exception):
+        # Fixed client text: an SDK error can carry the account URL or a blob
+        # path. Only the exception class is logged.
+        logging.getLogger("studio_api").error("unhandled %s", type(e).__name__)
+        return problem(500, "Internal Server Error")
 
     @app.exception_handler(RequestValidationError)
     def _request_invalid(_: Request, e: RequestValidationError):

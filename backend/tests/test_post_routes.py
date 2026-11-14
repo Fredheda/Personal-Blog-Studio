@@ -111,6 +111,30 @@ def test_a_foreign_origin_is_403_when_origins_are_configured() -> None:
     assert c.post("/posts", json={"title": "t"}).status_code == 201  # not a browser
 
 
+def test_a_revision_id_with_a_trailing_newline_is_a_404_problem(
+    client: TestClient,
+) -> None:
+    d = new_draft(client)
+    revision = client.post(f"/posts/{d['postId']}/revisions").json()["revision"]
+    response = client.get(f"/posts/{d['postId']}/revisions/{revision}%0A")
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/problem+json")
+
+
+def test_an_unexpected_error_is_a_500_problem_that_leaks_nothing() -> None:
+    class Broken(PostService):
+        def list_drafts(self):
+            raise RuntimeError("https://acct.blob.core.windows.net/blog-drafts/x")
+
+    app = create_app(Broken(InMemoryBlobStore()))
+    c = TestClient(app, headers=CSRF, raise_server_exceptions=False)
+    response = c.get("/posts")
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert "blob.core" not in response.text and "RuntimeError" not in response.text
+    assert set(response.json()) == {"type", "title", "status"}
+
+
 @pytest.mark.parametrize(
     "bad", ["x..x", "abc", "01arz3ndektsv4rrffq69g5fav", UNKNOWN + "A"]
 )

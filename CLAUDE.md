@@ -8,7 +8,7 @@ PR titles and descriptions never mention Claude Code.
 
 ## What this is
 
-Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) behind Easy Auth, plus the blog read API, which is not public: only approved callers with an Entra token can use it. Posts, media and audio live in private Azure storage, never in this repo. The backend and frontend skeletons exist (health endpoints, home page only); the studio UI, content model and read API follow the system spec at `../docs/shared/specs/2026-11-08-blog-studio.md` (workspace root). Overview: `README.md`.
+Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) behind Easy Auth, plus the blog read API, which is not public: only approved callers with an Entra token can use it. Posts, media and audio live in private Azure storage, never in this repo. The backend has the content model, blob storage layer, studio post service and studio post routes; the frontend is a skeleton (home page only). The studio UI and the read API routes follow the system spec at `../docs/shared/specs/2026-11-08-blog-studio.md` (workspace root). Overview: `README.md`.
 
 ## Azure
 
