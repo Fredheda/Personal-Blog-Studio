@@ -119,6 +119,30 @@ test("a save that gets no answer says the session may have expired and keeps the
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("mine");
 });
 
+test("the owner's order: details typed but not saved keep Publish disabled after the body is saved; Save details enables it", async () => {
+  const blank: Draft = { ...draft, title: "Hello world", slug: "", summary: "", tags: [], body: "" };
+  const saveBody = vi.fn(async (_id: string, body: string, _etag: string) => ({ ...blank, body, bodyEtag: '"b2"' }));
+  const patchMeta = vi.fn(async () => ({ ...blank, slug: "hello", summary: "Sum", metaEtag: '"m2"' }));
+  const publish = vi.fn(async () => ({ postId: draft.postId, slug: "hello", version: 1, publishedAt: "t", updatedAt: "t" }));
+  render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => blank, saveBody, patchMeta, publish })} />);
+  const publishButton = (await screen.findByRole("button", { name: "Publish" })) as HTMLButtonElement;
+
+  fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "hello" } });
+  fireEvent.change(screen.getByLabelText("Summary"), { target: { value: "Sum" } });
+  fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "# Hello" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
+  await waitFor(() => expect(saveBody).toHaveBeenCalled());
+  // The body is saved, the details are not: Publish stays disabled.
+  expect(publishButton.disabled).toBe(true);
+  expect(publishButton.title).toBe("Save your edits first");
+
+  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+  await waitFor(() => expect(patchMeta).toHaveBeenCalled());
+  await waitFor(() => expect(publishButton.disabled).toBe(false));
+  fireEvent.click(publishButton);
+  await waitFor(() => expect(publish).toHaveBeenCalledWith(draft.postId, '"b2"'));
+});
+
 test("publish is disabled while there are unsaved edits", async () => {
   render(<PostEditor id={draft.postId} api={fakeApi()} />);
   const publish = (await screen.findByRole("button", { name: "Publish" })) as HTMLButtonElement;
