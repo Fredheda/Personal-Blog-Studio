@@ -84,4 +84,4 @@ Dependabot (`.github/dependabot.yml`) opens weekly PRs: one grouped PR per ecosy
 
 `.github/workflows/claude-review.yml` reviews each PR once it is ready, on later pushes, and when the owner comments `@claude`. Secret: `CLAUDE_CODE_OAUTH_TOKEN` (repo secret; expires about 2027-11). Fallback if subscription auth is refused: use `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}` in both jobs. Fork and Dependabot PRs are skipped. Do not require the `Claude Review` job as a status check: it skips on PRs that change the workflow file.
 
-The `main` ruleset (`main-protect`) blocks deletion and force-push and requires a PR with 0 approvals; it requires the CI checks `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test` and `frontend-checks`.
+The `main` ruleset (`main-protect`) blocks deletion and force-push and requires a PR with 0 approvals; it requires the CI checks `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test` and `frontend-checks`, and the security checks `gitleaks` and `bandit` (`pip-audit`, `npm-audit` and `codeql` are advisory). `bandit` is skipped on a draft PR, which counts as passing.
