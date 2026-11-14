@@ -6,13 +6,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ApiError } from "../lib/problem";
 import { createStudioApi, type ListItem, type StudioApi } from "../lib/studio-api";
-import { ProblemList, SESSION_MESSAGE } from "./ProblemList";
+import { ProblemList } from "./ProblemList";
 
 export function Posts({ api }: { api?: StudioApi }) {
   const client = useMemo(() => api ?? createStudioApi(), [api]);
   const router = useRouter();
   const [items, setItems] = useState<ListItem[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -21,7 +21,7 @@ export function Posts({ api }: { api?: StudioApi }) {
     client
       .listPosts()
       .then((list) => alive && setItems(list))
-      .catch(() => alive && setFailed(true));
+      .catch((e) => alive && setLoadError(e instanceof ApiError ? e : new ApiError(0, null)));
     return () => {
       alive = false;
     };
@@ -52,7 +52,7 @@ export function Posts({ api }: { api?: StudioApi }) {
         <button type="submit" disabled={title.trim() === ""}>Create post</button>
       </form>
       <ProblemList error={error} />
-      {failed && <p role="alert" className="problem">{SESSION_MESSAGE}</p>}
+      <ProblemList error={loadError} />
       {items !== null && items.length === 0 && <p>No posts yet.</p>}
       {items !== null && items.length > 0 && (
         <ul className="posts">

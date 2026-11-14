@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ApiError } from "../lib/problem";
 import { createStudioApi, type Draft, type StudioApi } from "../lib/studio-api";
-import { ProblemList, SESSION_MESSAGE } from "./ProblemList";
+import { ProblemList } from "./ProblemList";
 
 const STALE = "This post changed elsewhere. Reload it to continue; your unsaved text stays in the box until then.";
 
@@ -23,11 +23,29 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [body, setBody] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState("");
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   function adopt(draft: Draft, parts: { meta?: boolean; body?: boolean } = { meta: true, body: true }) {
-    setSaved(draft);
+    // A save answers with the whole draft, but only the half just saved is
+    // adopted: taking the other half's newer ETag would let the next save of
+    // that half overwrite a change made in another tab without a 412.
+    setSaved((previous) => {
+      if (previous === null || (parts.meta && parts.body)) return draft;
+      if (parts.meta) {
+        return {
+          ...previous,
+          title: draft.title,
+          slug: draft.slug,
+          summary: draft.summary,
+          tags: draft.tags,
+          coverMediaId: draft.coverMediaId,
+          updatedAt: draft.updatedAt,
+          metaEtag: draft.metaEtag,
+        };
+      }
+      return { ...previous, body: draft.body, bodyEtag: draft.bodyEtag, updatedAt: draft.updatedAt };
+    });
     if (parts.meta) {
       setTitle(draft.title);
       setSlug(draft.slug);
@@ -42,14 +60,19 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     client
       .getPost(id)
       .then((draft) => alive && adopt(draft))
-      .catch(() => alive && setLoadFailed(true));
+      .catch((e) => alive && setLoadError(e instanceof ApiError ? e : new ApiError(0, null)));
     return () => {
       alive = false;
     };
   }, [client, id, reloadKey]);
 
-  if (loadFailed) {
-    return <p role="alert" className="problem">{SESSION_MESSAGE} <Link href="/">Back to the list</Link></p>;
+  if (loadError) {
+    return (
+      <section>
+        <ProblemList error={loadError} />
+        <p><Link href="/">Back to the list</Link></p>
+      </section>
+    );
   }
   if (saved === null) return <p>Loading…</p>;
 

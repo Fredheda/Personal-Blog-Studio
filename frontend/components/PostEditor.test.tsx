@@ -71,6 +71,31 @@ test("saving details patches the changed fields with the meta ETag and splits th
   );
 });
 
+test("saving details does not adopt the server's newer body ETag: a body changed in another tab still gets a 412", async () => {
+  // The details save answers with a draft whose body already changed elsewhere.
+  const patchMeta = vi.fn(async () => ({ ...draft, title: "New", metaEtag: '"m2"', bodyEtag: '"b9"', body: "changed elsewhere" }));
+  const saveBody = vi.fn(async (...args: [string, string, string]) => ({ ...draft, body: args[1], bodyEtag: '"b10"' }));
+  render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, saveBody })} />);
+  fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "New" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+  await waitFor(() => expect(patchMeta).toHaveBeenCalled());
+  fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "my edit" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
+  await waitFor(() => expect(saveBody).toHaveBeenCalled());
+  expect(saveBody.mock.calls[0][2]).toBe('"b1"'); // the ETag the textarea was based on
+  expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).not.toBe("changed elsewhere");
+});
+
+test("a load failure that is not a lost session says what failed", async () => {
+  const getPost = vi.fn(async () => {
+    throw new ApiError(404, { type: "about:blank", title: "Not Found", status: 404 });
+  });
+  render(<PostEditor id={draft.postId} api={fakeApi({ getPost })} />);
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Not Found");
+  expect(alert.textContent).not.toMatch(/session may have expired/i);
+});
+
 test("a 412 asks for a reload and keeps what the owner typed", async () => {
   const saveBody = vi.fn(async () => {
     throw new ApiError(412, { type: "about:blank", title: "Precondition Failed", status: 412 });
