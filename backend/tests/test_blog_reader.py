@@ -44,7 +44,7 @@ def test_a_post_summary_dumps_camel_case_and_nothing_internal() -> None:
 def test_the_detail_adds_body_version_media_and_a_null_audio() -> None:
     fields = set(PostDetail.model_fields)
     assert {"body", "version", "media", "audio"} <= fields
-    assert PostDetail.model_fields["audio"].default is None
+    assert PostDetail.model_fields["audio"].is_required()  # the key is always sent
     link = MediaLink(
         url="https://x",
         expires_at="2026-11-10T08:25:00Z",

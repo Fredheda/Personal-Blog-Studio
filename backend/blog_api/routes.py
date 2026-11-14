@@ -103,6 +103,7 @@ def create_router() -> APIRouter:
         detail = PostDetail(
             **meta.model_dump(exclude={"media", "audio"}),
             has_audio=False,
+            audio=None,
             body=published.body,
             media=[
                 MediaDescriptor(**d.model_dump(exclude={"blob_path"}))

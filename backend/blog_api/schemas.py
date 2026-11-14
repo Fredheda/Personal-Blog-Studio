@@ -42,7 +42,7 @@ class PostDetail(PostSummary):
     body: str
     version: int
     media: list[MediaDescriptor]
-    audio: dict | None = None  # always null in v1
+    audio: dict | None  # always sent, always null in v1 (the contract promises the key)
 
 
 class MediaLink(CamelModel):
