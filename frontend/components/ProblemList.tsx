@@ -20,6 +20,9 @@ export function ProblemList({ error }: { error: ApiError | null }) {
   return (
     <div role="alert" className="problem">
       <strong>{problem.title}</strong>
+      {/* The API's reason (for example "origin not allowed"). A refused body
+          lists its problems below instead, where the detail would only repeat them. */}
+      {lines.length === 0 && problem.detail && <> {problem.detail}</>}
       {lines.length > 0 && (
         <ul>
           {lines.map((p, i) => (

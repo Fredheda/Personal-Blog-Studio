@@ -108,34 +108,31 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       <textarea id="summary" style={{ minHeight: "4rem" }} value={summary} maxLength={500} onChange={(e) => setSummary(e.target.value)} />
       <label htmlFor="tags">Tags (comma separated)</label>
       <input id="tags" value={tags} onChange={(e) => setTags(e.target.value)} />
-      <button
-        type="button"
-        disabled={!metaDirty}
-        onClick={() =>
-          run(async () => {
-            const next = await client.patchMeta(id, { title, slug, summary, tags: splitTags(tags) }, saved.metaEtag);
-            adopt(next, { meta: true });
-            setNotice("Details saved.");
-          })
-        }
-      >
-        Save details
-      </button>
 
       <label htmlFor="body">Body (Markdown)</label>
       <textarea id="body" value={body} onChange={(e) => setBody(e.target.value)} />
       <button
         type="button"
-        disabled={!bodyDirty}
+        disabled={!dirty}
         onClick={() =>
           run(async () => {
-            const next = await client.saveBody(id, body, saved.bodyEtag);
-            adopt(next, { body: true });
-            setNotice("Body saved.");
+            // One button saves whichever halves have unsaved edits: the details
+            // first, then the body, each with its own ETag. Only the half just
+            // saved is adopted; a 412 on either half stops here and shows the
+            // reload banner (the half already saved stays saved).
+            if (metaDirty) {
+              const next = await client.patchMeta(id, { title, slug, summary, tags: splitTags(tags) }, saved.metaEtag);
+              adopt(next, { meta: true });
+            }
+            if (bodyDirty) {
+              const next = await client.saveBody(id, body, saved.bodyEtag);
+              adopt(next, { body: true });
+            }
+            setNotice("Saved.");
           })
         }
       >
-        Save body
+        Save
       </button>
 
       <hr />

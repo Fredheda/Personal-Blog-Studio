@@ -49,10 +49,10 @@ test("saving the body sends the loaded ETag and then uses the new one", async ()
   const saveBody = vi.fn(async (...args: [string, string, string]) => ({ ...draft, body: args[1], bodyEtag: '"b2"' }));
   render(<PostEditor id={draft.postId} api={fakeApi({ saveBody })} />);
   fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "# Changed" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(saveBody).toHaveBeenCalledWith(draft.postId, "# Changed", '"b1"'));
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "# Again" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(saveBody).toHaveBeenLastCalledWith(draft.postId, "# Again", '"b2"'));
 });
 
@@ -61,7 +61,7 @@ test("saving details patches the changed fields with the meta ETag and splits th
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta })} />);
   fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "New" } });
   fireEvent.change(screen.getByLabelText("Tags (comma separated)"), { target: { value: "maths, python ,," } });
-  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(patchMeta).toHaveBeenCalledWith(
       draft.postId,
@@ -77,10 +77,10 @@ test("saving details does not adopt the server's newer body ETag: a body changed
   const saveBody = vi.fn(async (...args: [string, string, string]) => ({ ...draft, body: args[1], bodyEtag: '"b10"' }));
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, saveBody })} />);
   fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "New" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(patchMeta).toHaveBeenCalled());
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "my edit" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(saveBody).toHaveBeenCalled());
   expect(saveBody.mock.calls[0][2]).toBe('"b1"'); // the ETag the textarea was based on
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).not.toBe("changed elsewhere");
@@ -102,7 +102,7 @@ test("a 412 asks for a reload and keeps what the owner typed", async () => {
   });
   render(<PostEditor id={draft.postId} api={fakeApi({ saveBody })} />);
   fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "mine" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(await screen.findByText(/changed elsewhere/i)).toBeTruthy();
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("mine");
   expect(screen.getByRole("button", { name: "Reload the post" })).toBeTruthy();
@@ -114,33 +114,96 @@ test("a save that gets no answer says the session may have expired and keeps the
   });
   render(<PostEditor id={draft.postId} api={fakeApi({ saveBody })} />);
   fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "mine" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect((await screen.findByRole("alert")).textContent).toMatch(/session may have expired/i);
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("mine");
 });
 
-test("the owner's order: details typed but not saved keep Publish disabled after the body is saved; Save details enables it", async () => {
-  const blank: Draft = { ...draft, title: "Hello world", slug: "", summary: "", tags: [], body: "" };
-  const saveBody = vi.fn(async (_id: string, body: string, _etag: string) => ({ ...blank, body, bodyEtag: '"b2"' }));
-  const patchMeta = vi.fn(async () => ({ ...blank, slug: "hello", summary: "Sum", metaEtag: '"m2"' }));
-  const publish = vi.fn(async () => ({ postId: draft.postId, slug: "hello", version: 1, publishedAt: "t", updatedAt: "t" }));
-  render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => blank, saveBody, patchMeta, publish })} />);
-  const publishButton = (await screen.findByRole("button", { name: "Publish" })) as HTMLButtonElement;
+const blank: Draft = { ...draft, title: "Hello world", slug: "", summary: "", tags: [], body: "" };
 
+test("one Save with only the details changed saves the details and nothing else", async () => {
+  const patchMeta = vi.fn(async () => ({ ...blank, slug: "hello", metaEtag: '"m2"' }));
+  const saveBody = vi.fn();
+  render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => blank, patchMeta, saveBody })} />);
+  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(patchMeta).toHaveBeenCalledTimes(1));
+  expect(saveBody).not.toHaveBeenCalled();
+});
+
+test("one Save with only the body changed saves the body and nothing else", async () => {
+  const patchMeta = vi.fn();
+  const saveBody = vi.fn(async (...args: [string, string, string]) => ({ ...blank, body: args[1], bodyEtag: '"b2"' }));
+  render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => blank, patchMeta, saveBody })} />);
+  fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "# Hello" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(saveBody).toHaveBeenCalledWith(draft.postId, "# Hello", '"b1"'));
+  expect(patchMeta).not.toHaveBeenCalled();
+});
+
+test("one Save with both changed saves the details first, then the body, each with its own ETag, and Publish becomes available", async () => {
+  const calls: string[] = [];
+  const patchMeta = vi.fn(async (...args: [string, unknown, string]) => {
+    calls.push(`details ${args[2]}`);
+    return { ...blank, slug: "hello", summary: "Sum", metaEtag: '"m2"', bodyEtag: '"b9"' };
+  });
+  const saveBody = vi.fn(async (...args: [string, string, string]) => {
+    calls.push(`body ${args[2]}`);
+    return { ...blank, body: args[1], bodyEtag: '"b2"' };
+  });
+  const publish = vi.fn(async () => ({ postId: draft.postId, slug: "hello", version: 1, publishedAt: "t", updatedAt: "t" }));
+  render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => blank, patchMeta, saveBody, publish })} />);
+  const publishButton = (await screen.findByRole("button", { name: "Publish" })) as HTMLButtonElement;
   fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "hello" } });
   fireEvent.change(screen.getByLabelText("Summary"), { target: { value: "Sum" } });
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "# Hello" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save body" }));
-  await waitFor(() => expect(saveBody).toHaveBeenCalled());
-  // The body is saved, the details are not: Publish stays disabled.
   expect(publishButton.disabled).toBe(true);
-  expect(publishButton.title).toBe("Save your edits first");
-
-  fireEvent.click(screen.getByRole("button", { name: "Save details" }));
-  await waitFor(() => expect(patchMeta).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(saveBody).toHaveBeenCalled());
+  // details first with the meta ETag, then the body with the body ETag it was
+  // loaded with (not the "b9" the details answer carried)
+  expect(calls).toEqual(['details "m1"', 'body "b1"']);
   await waitFor(() => expect(publishButton.disabled).toBe(false));
   fireEvent.click(publishButton);
   await waitFor(() => expect(publish).toHaveBeenCalledWith(draft.postId, '"b2"'));
+});
+
+test("a 412 on the body half after the details were saved shows the reload banner and keeps both texts", async () => {
+  const patchMeta = vi.fn(async () => ({ ...blank, slug: "hello", metaEtag: '"m2"' }));
+  const saveBody = vi.fn(async () => {
+    throw new ApiError(412, { type: "about:blank", title: "Precondition Failed", status: 412 });
+  });
+  render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => blank, patchMeta, saveBody })} />);
+  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello" } });
+  fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "mine" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByText(/changed elsewhere/i)).toBeTruthy();
+  expect(patchMeta).toHaveBeenCalledTimes(1);
+  expect((screen.getByLabelText("Slug") as HTMLInputElement).value).toBe("hello");
+  expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("mine");
+  expect(screen.getByRole("button", { name: "Reload the post" })).toBeTruthy();
+});
+
+test("a failed save shows the API's reason, not just its title", async () => {
+  const saveBody = vi.fn(async () => {
+    throw new ApiError(403, { type: "about:blank", title: "Forbidden", status: 403, detail: "origin not allowed" });
+  });
+  render(<PostEditor id={draft.postId} api={fakeApi({ saveBody })} />);
+  fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "mine" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Forbidden");
+  expect(alert.textContent).toContain("origin not allowed");
+});
+
+test("a post without tags saves: clearing the tags sends an empty list", async () => {
+  const patchMeta = vi.fn(async () => ({ ...draft, tags: [], metaEtag: '"m2"' }));
+  render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta })} />);
+  fireEvent.change(await screen.findByLabelText("Tags (comma separated)"), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(patchMeta).toHaveBeenCalledWith(draft.postId, { title: "Hello", slug: "hello", summary: "Sum", tags: [] }, '"m1"'),
+  );
 });
 
 test("publish is disabled while there are unsaved edits", async () => {
