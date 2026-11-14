@@ -24,6 +24,7 @@ pytest = "9.2.0"
 httpx2 = ">=2.0.0,<3.0.0"
 ruff = "0.17.3"
 pyright = "1.1.414"
+jsonschema = "4.26.0"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
