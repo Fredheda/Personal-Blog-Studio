@@ -93,55 +93,18 @@ def test_step_2_does_not_pass_on_a_failure_that_is_not_a_refusal(
     assert "FAIL  2" in result.stdout
 
 
-def test_step_3_passes_on_a_2xx_or_the_apps_own_404(
-    fake_az: FakeAz, tmp_path: Path
-) -> None:
-    for code in ("404", "200"):
-        result = run(fake_az, tmp_path, "--run", FAKE_APPROVED_CODE=code)
-        assert result.returncode == 0, (code, result.stdout)
-        assert "PASS  3" in result.stdout
-
-
-def test_step_3_also_accepts_the_apps_problem_json_404(
-    fake_az: FakeAz, tmp_path: Path
-) -> None:
-    # Since the shared app factory answers unknown paths as problem+json, a
-    # deployed read API without /v1/posts yet says this instead of {"detail"}.
-    result = run(
-        fake_az,
-        tmp_path,
-        "--run",
-        FAKE_APPROVED_CODE="404",
-        FAKE_APPROVED_BODY='{"type":"about:blank","title":"Not Found","status":404}',
-    )
+def test_step_3_passes_only_on_a_200(fake_az: FakeAz, tmp_path: Path) -> None:
+    result = run(fake_az, tmp_path, "--run", FAKE_APPROVED_CODE="200")
     assert result.returncode == 0, result.stdout
     assert "PASS  3" in result.stdout
 
 
-def test_step_3_fails_when_the_approved_caller_is_rejected_or_the_answer_is_odd(
-    fake_az: FakeAz, tmp_path: Path
-) -> None:
-    for code in ("401", "403", "500", "000"):
+def test_step_3_fails_on_anything_but_a_200(fake_az: FakeAz, tmp_path: Path) -> None:
+    # 404 included, even with the app's own body: the route must exist now.
+    for code in ("201", "204", "301", "401", "403", "404", "500", "000"):
         result = run(fake_az, tmp_path, "--run", FAKE_APPROVED_CODE=code)
         assert result.returncode == 1, code
-        assert "FAIL  3" in result.stdout
-
-
-def test_step_3_fails_on_an_ingress_404_for_a_stopped_app(
-    fake_az: FakeAz, tmp_path: Path
-) -> None:
-    # Container Apps answers 404 with its own body when the app is stopped or
-    # missing; that must not count as "reached the app".
-    result = run(
-        fake_az,
-        tmp_path,
-        "--run",
-        FAKE_APPROVED_CODE="404",
-        FAKE_APPROVED_BODY="Container App is stopped or does not exist",
-    )
-    assert result.returncode == 1
-    assert "FAIL  3" in result.stdout
-    assert "did not come" in result.stdout
+        assert "FAIL  3" in result.stdout, code
 
 
 def test_a_secret_that_has_not_propagated_yet_is_retried(
