@@ -13,3 +13,15 @@ code,
 pre {
   font-family: var(--ui-mono);
 }
+
+main { max-width: 52rem; margin: 0 auto; }
+label { display: block; margin: 0.75rem 0 0.25rem; font-weight: 600; }
+input, textarea, button { font: inherit; }
+input, textarea { width: 100%; box-sizing: border-box; padding: 0.4rem; }
+textarea { font-family: var(--ui-mono); min-height: 24rem; }
+button { margin: 0.75rem 0.5rem 0 0; padding: 0.4rem 0.9rem; }
+.posts { list-style: none; padding: 0; }
+.posts li { margin: 0.5rem 0; }
+.muted { color: #666; }
+.problem { border: 1px solid #b00020; padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
+.ok { border: 1px solid #1b7a2e; padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
