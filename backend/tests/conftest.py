@@ -333,9 +333,7 @@ exec "$REAL_JQ" "$@"
 # with `-d @file`; API requests read the header file given with `-H @file` and
 # write a body to the `-o file` they were given.
 # FAKE_DENIED_TOKEN / FAKE_APPROVED_TOKEN: refused | notready | none | issued (default).
-# FAKE_UNAUTH_CODE (401), FAKE_DENIED_CODE (403), FAKE_APPROVED_CODE (404).
-# FAKE_APPROVED_BODY: body for the approved caller's answer (default: the app's
-# own 404 body, {"detail":"Not Found"}, or {} for other codes).
+# FAKE_UNAUTH_CODE (401), FAKE_DENIED_CODE (403), FAKE_APPROVED_CODE (200).
 FAKE_CURL = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_LOG.curl"
 form=""; hdr=""; out=""; prev=""
@@ -369,9 +367,8 @@ case "$*" in
     if grep -q 'gate-denied' "$hdr"; then
       write_body '{}'; echo "${FAKE_DENIED_CODE:-403}"
     else
-      code=${FAKE_APPROVED_CODE:-404}
-      if [ "$code" = 404 ]; then default='{"detail":"Not Found"}'; else default='{}'; fi
-      write_body "${FAKE_APPROVED_BODY:-$default}"; echo "$code"
+      code=${FAKE_APPROVED_CODE:-200}
+      write_body '{"items":[],"nextCursor":null}'; echo "$code"
     fi ;;
 esac
 """
