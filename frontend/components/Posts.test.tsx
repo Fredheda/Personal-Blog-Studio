@@ -32,6 +32,10 @@ function fakeApi(overrides: Partial<StudioApi> = {}): StudioApi {
       throw new Error("unused");
     },
     unpublish: async () => undefined,
+    checkPost: async () => {
+      throw new Error("unused");
+    },
+    deletePost: async () => undefined,
     ...overrides,
   };
 }
@@ -39,8 +43,24 @@ function fakeApi(overrides: Partial<StudioApi> = {}): StudioApi {
 test("lists the posts with a link to each editor", async () => {
   const api = fakeApi({
     listPosts: async () => [
-      { postId: "01AAAAAAAAAAAAAAAAAAAAAAAA", title: "First", slug: "first", updatedAt: "2026-11-10T10:00:00Z" },
-      { postId: "01BBBBBBBBBBBBBBBBBBBBBBBB", title: "", slug: "", updatedAt: "2026-11-09T10:00:00Z" },
+      {
+        postId: "01AAAAAAAAAAAAAAAAAAAAAAAA",
+        title: "First",
+        slug: "first",
+        updatedAt: "2026-11-10T10:00:00Z",
+        published: false,
+        version: null,
+        publishedAt: null,
+      },
+      {
+        postId: "01BBBBBBBBBBBBBBBBBBBBBBBB",
+        title: "",
+        slug: "",
+        updatedAt: "2026-11-09T10:00:00Z",
+        published: false,
+        version: null,
+        publishedAt: null,
+      },
     ],
   });
   render(<Posts api={api} />);

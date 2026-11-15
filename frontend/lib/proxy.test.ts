@@ -47,6 +47,17 @@ describe("allowlist", () => {
 });
 
 describe("forwarding", () => {
+  test.each([
+    ["GET", ["posts", "ID", "check"], "http://studio-api/posts/ID/check"],
+    ["DELETE", ["posts", "ID"], "http://studio-api/posts/ID"],
+  ])("%s %j is forwarded", async (method, segments, url) => {
+    const { calls, deps } = setup();
+    await proxy(req(method, `/api/studio/${segments.join("/")}`), segments, deps);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(url);
+    expect(calls[0].init.method).toBe(method);
+  });
+
   test("adds the bearer token, keeps X-Blog-Studio and Origin as sent, drops the rest", async () => {
     const { calls, deps } = setup();
     await proxy(

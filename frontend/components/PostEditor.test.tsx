@@ -19,6 +19,10 @@ const draft: Draft = {
   body: "# Hi",
   bodyEtag: '"b1"',
   metaEtag: '"m1"',
+  published: false,
+  version: null,
+  publishedAt: null,
+  slugLocked: false,
 };
 
 function fakeApi(overrides: Partial<StudioApi> = {}): StudioApi {
