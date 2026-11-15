@@ -194,3 +194,17 @@ def test_the_web_app_declares_its_custom_domain_so_a_redeploy_keeps_it() -> None
 def test_only_the_web_app_has_a_custom_domain() -> None:
     for app in ("studioApi", "blogApi"):
         assert "customDomains" not in block(MAIN, app), app
+
+
+def test_only_the_studio_api_gets_the_allowed_origins_built_from_the_web_hostnames() -> (
+    None
+):
+    studio = block(MAIN, "studioApi")
+    assert "BLOG_STUDIO_ORIGINS" in studio and "studioOrigins" in studio
+    for other in ("web", "blogApi"):
+        assert "BLOG_STUDIO_ORIGINS" not in block(MAIN, other)
+    var = re.search(r"^var studioOrigins = .*?(?=^var |^resource )", MAIN, re.M | re.S)
+    assert var, "var studioOrigins not found"
+    text = var.group(0)
+    assert "appEnvironment.properties.defaultDomain" in text
+    assert "webCustomDomain" in text and "webAppName" in text

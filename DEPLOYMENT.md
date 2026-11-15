@@ -14,6 +14,8 @@ How the blog studio and the blog read API reach Azure. Everything here changes s
 | `blog-drafts`, `blog-published` | `fhstorageportfolio` (`FrederikHedaPlayground`) | private containers; roles in `infra/storage.bicep` |
 | images `blogstudio-web`, `blogstudio-api`, `blogapi` | `acrchatbotfredheda` | tagged with the full commit SHA and `latest` |
 
+`ca-blogstudio-api` reads `BLOG_STUDIO_ORIGINS` (the web app's default hostname and custom domain); its same-origin guard rejects a request whose `Origin` is not listed. It is set by `infra/deploy.sh`.
+
 Scale: `minReplicas 0`, `maxReplicas 1`, 0.25 CPU / 0.5Gi each. Cost basis: the free allowance (owner decision); check Cost Management after the first month.
 
 Roles (least privilege): the studio API identity is Storage Blob Data Contributor on both containers; the read API identity is Storage Blob Data Reader on `blog-published` only; both are Storage Blob Delegator on the account (to sign short-lived SAS URLs). Nothing uses a storage key, a connection string or a registry password.

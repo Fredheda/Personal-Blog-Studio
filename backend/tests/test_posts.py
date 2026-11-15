@@ -161,6 +161,16 @@ def test_a_stale_restore_leaves_no_extra_revision(svc: PostService) -> None:
     assert svc.list_revisions(d.post_id) == [revision]
 
 
+def test_tags_are_optional_a_post_without_any_publishes_with_an_empty_list(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    pid = ready(svc)  # no tags set
+    published = svc.publish(pid, if_match=svc.get(pid).body_etag)
+    assert published.tags == []
+    index = store.read(layout.PUBLISHED, layout.INDEX)
+    assert index is not None and '"tags": []' in index.content.decode()
+
+
 def test_publish_writes_snapshot_slug_and_index_in_that_order(
     svc: PostService, store: InMemoryBlobStore
 ) -> None:

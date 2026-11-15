@@ -74,6 +74,13 @@ var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var loginServer = '${acrName}.azurecr.io'
 var issuer = '${environment().authentication.loginEndpoint}${tenantId}/v2.0'
 var storageBlobUrl = 'https://${storageAccountName}.blob.${environment().suffixes.storage}'
+// Origins the browser may send to the studio API through the web app: the
+// default hostname and, when set, the custom domain. The API's same-origin
+// guard compares a present Origin header with this list.
+var studioOrigins = join(concat(
+  ['https://${webAppName}.${appEnvironment.properties.defaultDomain}'],
+  empty(webCustomDomain) ? [] : ['https://${webCustomDomain}']
+), ',')
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: acrName
@@ -255,6 +262,10 @@ resource studioApi 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'BLOG_PUBLISHED_CONTAINER'
               value: 'blog-published'
+            }
+            {
+              name: 'BLOG_STUDIO_ORIGINS'
+              value: studioOrigins
             }
           ]
         }
