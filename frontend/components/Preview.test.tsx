@@ -34,5 +34,5 @@ test("Markdown image syntax draws no img element: nothing is fetched until media
 test("a javascript: link is not turned into a live link", () => {
   const { container } = render(<Preview markdown={"[x](javascript:alert(1))"} />);
   const href = container.querySelector("a")?.getAttribute("href") ?? "";
-  expect(href.startsWith("javascript:")).toBe(false);
+  expect(href).not.toMatch(/^\s*(javascript|data|vbscript):/i);
 });
