@@ -23,8 +23,10 @@ export function problemResponse(
   status: number,
   title: string,
   headers: Record<string, string> = {},
+  detail?: string,
 ): Response {
-  return new Response(JSON.stringify({ type: "about:blank", title, status }), {
+  const body = { type: "about:blank", title, status, ...(detail === undefined ? {} : { detail }) };
+  return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/problem+json", "cache-control": "no-store", ...headers },
   });
