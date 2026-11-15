@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { MAX_BODY_BYTES, proxy } from "./proxy";
+import { MAX_BODY_BYTES, proxy, UPSTREAM_TIMEOUT_MS, WAKING_UP } from "./proxy";
 
 type Call = { url: string; init: RequestInit };
 
@@ -195,5 +195,90 @@ describe("limits and failures", () => {
     expect(response.status).toBe(502);
     expect(text).not.toContain("secret");
     expect(JSON.parse(text)).toMatchObject({ status: 502, title: "Bad Gateway" });
+  });
+});
+
+describe("cold start and diagnostics", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  test("the upstream gets 60 seconds", () => {
+    expect(UPSTREAM_TIMEOUT_MS).toBe(60_000);
+  });
+
+  test("a timeout is a 504 problem+json that says the studio API is waking up", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const timeout = Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    const { deps } = setup(() => {
+      throw timeout;
+    });
+    const response = await proxy(req("POST", "/api/studio/posts", { body: "{}" }), ["posts"], deps);
+    expect(response.status).toBe(504);
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
+    expect(response.headers.get("retry-after")).toBe("5");
+    expect(await response.json()).toEqual({
+      type: "about:blank",
+      title: "Gateway Timeout",
+      status: 504,
+      detail: WAKING_UP,
+    });
+  });
+
+  test("another failure stays the fixed 502 without a detail", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { deps } = setup(() => {
+      throw new TypeError("fetch failed");
+    });
+    const response = await proxy(req("GET", "/api/studio/posts"), ["posts"], deps);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ type: "about:blank", title: "Bad Gateway", status: 502 });
+  });
+
+  test.each([
+    [201, "application/json", '{"a":1}'],
+    [403, "text/html", "<html>no</html>"],
+    [500, "application/problem+json", '{"title":"x"}'],
+  ])("an upstream answer %i is logged with its metadata", async (status, type, body) => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { deps } = setup(
+      () =>
+        new Response(body, {
+          status,
+          headers: { "content-type": type, server: "envoy", "www-authenticate": 'Bearer realm="x"' },
+        }),
+    );
+    await proxy(req("POST", "/api/studio/posts"), ["posts"], deps);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0][0]).toBe(
+      `studio proxy: POST /posts ${status} content-type=${type} length=${body.length} server=envoy www-authenticate=Bearer realm="x"`,
+    );
+  });
+
+  test("a missing header is logged as a dash and a redirect is logged too", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { deps } = setup(() => new Response(null, { status: 307, headers: { location: "https://elsewhere.example/" } }));
+    await proxy(req("GET", "/api/studio/posts"), ["posts"], deps);
+    expect(log.mock.calls[0][0]).toBe("studio proxy: GET /posts 307 content-type=- length=0 server=- www-authenticate=-");
+  });
+
+  test("the log never holds the token, a cookie, a set-cookie value, a body or odd characters", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { deps } = setup(
+      () =>
+        new Response("SECRET-BODY", {
+          status: 403,
+          headers: { "set-cookie": "session=SECRET-COOKIE", server: `eviléforged ${"x".repeat(300)}` },
+        }),
+    );
+    await proxy(
+      req("POST", "/api/studio/posts", { body: "{}", headers: { cookie: "AppServiceAuthSession=SECRET-COOKIE" } }),
+      ["posts"],
+      deps,
+    );
+    const line = String(log.mock.calls[0][0]);
+    for (const secret of ["tok", "SECRET-COOKIE", "SECRET-BODY"]) expect(line).not.toContain(secret);
+    expect(line).toMatch(/^[\x20-\x7e]*$/); // the header's non-ASCII character was replaced
+    expect(line).toContain("server=evil?forged ");
+    expect(line.length).toBeLessThan(400);
   });
 });
