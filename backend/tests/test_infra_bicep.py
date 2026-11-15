@@ -208,3 +208,16 @@ def test_only_the_studio_api_gets_the_allowed_origins_built_from_the_web_hostnam
     text = var.group(0)
     assert "appEnvironment.properties.defaultDomain" in text
     assert "webCustomDomain" in text and "webAppName" in text
+
+
+def test_the_web_app_lets_its_custom_domain_pass_the_easy_auth_csrf_check() -> None:
+    # Easy Auth rejects a cookie-authenticated POST whose Origin is not an
+    # approved external redirect URL; the custom domain must be on the list.
+    web = block(MAIN, "webAuth")
+    assert (
+        "allowedExternalRedirectUrls: empty(webCustomDomain) ? [] : [\n"
+        "        'https://${webCustomDomain}'\n"
+        "      ]"
+    ) in web
+    for other in ("studioApiAuth", "blogApiAuth"):
+        assert "login:" not in block(MAIN, other), other

@@ -35,7 +35,7 @@ Blog authoring studio (editor, AI writing agent; read-aloud audio comes later) b
 - `deploy.sh` reads the git-ignored `.env` (names in `.env.example`; the Entra scripts write the IDs and the Easy Auth secret) and needs an explicit full SHA whose images exist. Secrets reach `az`, `curl` and `jq` only through mode-600 temporary files or the environment, never through arguments.
 - The Entra scripts are dry runs unless given `--apply` (`--run` for the gate) and re-apply every property on each run. Run them only on the owner's explicit yes for that run.
 - Code deploys go through the Deploy workflow (`production` environment, owner approval), infra through `deploy.sh`. `redeploy.sh <sha>` and `ship.sh` change production too: owner's yes for each run. Never approve a waiting deployment.
-- The web app's custom domain is declared in the Bicep from `BLOG_WEB_CUSTOM_DOMAIN` and `BLOG_WEB_CERTIFICATE_NAME` (written by `bind-domain.sh`); `deploy.sh` refuses a deploy that would unbind it.
+- The web app's custom domain is declared in the Bicep from `BLOG_WEB_CUSTOM_DOMAIN` and `BLOG_WEB_CERTIFICATE_NAME` (written by `bind-domain.sh`); `deploy.sh` refuses a deploy that would unbind it. The web auth config also lists the domain in `login.allowedExternalRedirectUrls`: without it Easy Auth answers every browser POST with an empty 403.
 
 ## Commands
 
