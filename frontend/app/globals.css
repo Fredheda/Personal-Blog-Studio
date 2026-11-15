@@ -57,5 +57,20 @@ button { margin: 0.75rem 0.5rem 0 0; padding: 0.4rem 0.9rem; }
   max-width: 294px;
   font-family: var(--crepe-font-code);
 }
+/* The Preview tab: tables with a grid and a shaded header, code in a box.
+   Plain CSS on purpose; the studio theme ticket replaces it. */
+.preview table { border-collapse: collapse; margin: 1rem 0; }
+.preview th,
+.preview td { border: 1px solid #bbb; padding: 0.35rem 0.7rem; min-width: 3rem; height: 1.6rem; }
+.preview th { background: #eee; font-weight: 700; }
+.preview pre {
+  background: #f4f4f4;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+.preview code { background: #f0f0f0; border-radius: 4px; padding: 0.1rem 0.3rem; }
+.preview pre code { background: none; padding: 0; }
 .tabs button[aria-pressed="true"] { font-weight: 700; }
 .status { color: #555; font-size: 0.9rem; }
