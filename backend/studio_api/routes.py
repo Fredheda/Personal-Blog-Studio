@@ -60,6 +60,7 @@ class DraftOut(CamelModel):
     published: bool
     version: int | None
     published_at: str | None
+    version_published_at: str | None
     slug_locked: bool
 
 
@@ -92,6 +93,7 @@ def _draft_out(draft: Draft) -> dict:
         published=draft.published,
         version=draft.published_version,
         published_at=draft.published_at,
+        version_published_at=draft.version_published_at,
         slug_locked=draft.slug_locked,
     ).model_dump(by_alias=True)
 
@@ -161,6 +163,7 @@ def create_router() -> APIRouter:
                     "published": d.published,
                     "version": d.published_version,
                     "publishedAt": d.published_at,
+                    "versionPublishedAt": d.version_published_at,
                 }
                 for d in service.list_drafts()
             ]

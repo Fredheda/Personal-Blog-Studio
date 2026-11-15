@@ -8,6 +8,7 @@ export type ListItem = {
   published: boolean;
   version: number | null;
   publishedAt: string | null;
+  versionPublishedAt: string | null;
 };
 export type Draft = {
   postId: string;
@@ -24,6 +25,7 @@ export type Draft = {
   published: boolean;
   version: number | null;
   publishedAt: string | null;
+  versionPublishedAt: string | null;
   slugLocked: boolean;
 };
 export type MetaPatch = {

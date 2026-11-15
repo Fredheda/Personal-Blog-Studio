@@ -22,6 +22,7 @@ const draft: Draft = {
   published: false,
   version: null,
   publishedAt: null,
+  versionPublishedAt: null,
   slugLocked: false,
 };
 

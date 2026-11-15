@@ -385,13 +385,17 @@ def test_a_published_post_reports_version_first_publish_time_and_a_locked_slug(
     d = svc.get(pid)
     assert d.published and d.published_version == 1
     assert d.published_at == first.published_at and d.slug_locked
+    assert d.version_published_at == first.updated_at
     svc.update_body(pid, "Changed", if_match=d.body_etag)
-    svc.publish(pid, if_match=svc.get(pid).body_etag)
+    second = svc.publish(pid, if_match=svc.get(pid).body_etag)
     again = svc.get(pid)
     assert again.published_version == 2 and again.published_at == first.published_at
+    assert again.version_published_at == second.updated_at
+    assert again.version_published_at != again.published_at
     item = next(i for i in svc.list_drafts() if i.post_id == pid)
     assert item.published and item.published_version == 2
     assert item.published_at == first.published_at
+    assert item.version_published_at == second.updated_at
 
 
 def test_unpublishing_clears_the_status_but_the_slug_stays_locked(
@@ -402,6 +406,7 @@ def test_unpublishing_clears_the_status_but_the_slug_stays_locked(
     svc.unpublish(pid)
     d = svc.get(pid)
     assert not d.published and d.published_version is None and d.published_at is None
+    assert d.version_published_at is None
     assert d.slug_locked
 
 

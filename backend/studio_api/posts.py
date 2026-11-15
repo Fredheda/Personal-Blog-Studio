@@ -55,6 +55,7 @@ class Draft:
     edited_at: str  # the later of the last details save and the last body save
     published_version: int | None  # None: not published now
     published_at: str | None  # first publish time; None: not published now
+    version_published_at: str | None  # when the current version went live
     slug_locked: bool  # published at least once
 
     @property
@@ -90,6 +91,7 @@ class DraftSummary:
     updated_at: str  # the later of the last details save and the last body save
     published_version: int | None
     published_at: str | None
+    version_published_at: str | None
 
     @property
     def published(self) -> bool:
@@ -170,6 +172,7 @@ class PostService:
             edited_at=_later(meta.updated_at, modified),
             published_version=entry.version if entry else None,
             published_at=entry.published_at if entry else None,
+            version_published_at=entry.updated_at if entry else None,
             slug_locked=entry is not None or self._ever_published(post_id),
         )
 
@@ -195,6 +198,7 @@ class PostService:
                             ),
                             entry.version if entry else None,
                             entry.published_at if entry else None,
+                            entry.updated_at if entry else None,
                         )
                     )
         return sorted(found, key=lambda d: d.updated_at, reverse=True)

@@ -51,6 +51,7 @@ test("lists the posts with a link to each editor", async () => {
         published: false,
         version: null,
         publishedAt: null,
+        versionPublishedAt: null,
       },
       {
         postId: "01BBBBBBBBBBBBBBBBBBBBBBBB",
@@ -60,6 +61,7 @@ test("lists the posts with a link to each editor", async () => {
         published: false,
         version: null,
         publishedAt: null,
+        versionPublishedAt: null,
       },
     ],
   });

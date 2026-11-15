@@ -57,6 +57,7 @@ def test_create_returns_a_camelcase_draft_with_etags_and_a_location(
         "published",
         "version",
         "publishedAt",
+        "versionPublishedAt",
         "slugLocked",
     } <= set(draft)
     assert draft["title"] == "Hi" and draft["body"] == ""
@@ -167,17 +168,19 @@ def test_list_shows_drafts_newest_first(client: TestClient) -> None:
         "published",
         "version",
         "publishedAt",
+        "versionPublishedAt",
     }
 
 
 def test_a_new_draft_reports_not_published(client: TestClient) -> None:
     d = new_draft(client)
-    assert (d["published"], d["version"], d["publishedAt"], d["slugLocked"]) == (
-        False,
-        None,
-        None,
-        False,
-    )
+    assert (
+        d["published"],
+        d["version"],
+        d["publishedAt"],
+        d["versionPublishedAt"],
+        d["slugLocked"],
+    ) == (False, None, None, None, False)
 
 
 def test_updated_at_moves_after_a_body_save_in_the_draft_and_the_list() -> None:
@@ -209,10 +212,12 @@ def test_a_published_post_reports_its_status_in_the_draft_and_the_list(
     draft = client.get(f"/posts/{d['postId']}").json()
     assert draft["published"] is True and draft["version"] == 1
     assert draft["publishedAt"] == published["publishedAt"]
+    assert draft["versionPublishedAt"] == published["updatedAt"]
     assert draft["slugLocked"] is True
     item = client.get("/posts").json()["items"][0]
     assert (item["published"], item["version"]) == (True, 1)
     assert item["publishedAt"] == published["publishedAt"]
+    assert item["versionPublishedAt"] == published["updatedAt"]
 
 
 def test_check_answers_for_what_is_saved(client: TestClient) -> None:
