@@ -10,7 +10,7 @@ export const crepeFeatures = {
 
 export const crepeFeatureConfigs = {
   [Crepe.Feature.Latex]: {
-    // MathML only: no KaTeX CSS, no maths font (owner rule).
+    // MathML only: no KaTeX CSS and no maths font (system fonts only).
     katexOptions: { output: "mathml" as const, throwOnError: false },
   },
   [Crepe.Feature.CodeMirror]: {

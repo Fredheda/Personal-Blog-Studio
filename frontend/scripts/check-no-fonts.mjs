@@ -18,7 +18,7 @@ export function findFonts(dir) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const found = findFonts(join(process.cwd(), ".next", "static"));
   if (found.length > 0) {
-    console.error(`Font files in the build (owner rule: system fonts only):\n${found.join("\n")}`);
+    console.error(`Font files in the build (system fonts only):\n${found.join("\n")}`);
     process.exit(1);
   }
   console.log("no font files in .next/static");

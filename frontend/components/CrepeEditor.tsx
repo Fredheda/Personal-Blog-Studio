@@ -25,14 +25,13 @@ import { normaliseMarkdown } from "../lib/normalise";
 type Props = {
   initial: string;
   onChange: (markdown: string) => void;
-  readonly?: boolean;
 };
 
 /** Milkdown Crepe as a Markdown editor. `initial` is read once, at mount: the
  *  parent remounts it with a new `key` to replace the text (reload). Nothing is
  *  reported until the owner changes the text: whatever Crepe makes of the loaded
  *  Markdown is taken as the baseline, so opening a post never writes it. */
-export function CrepeEditor({ initial, onChange, readonly = false }: Props) {
+export function CrepeEditor({ initial, onChange }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const latestOnChange = useRef(onChange);
   useEffect(() => {
@@ -63,14 +62,13 @@ export function CrepeEditor({ initial, onChange, readonly = false }: Props) {
     void crepe.create().then(() => {
       if (!alive) return void crepe.destroy();
       reported = normaliseMarkdown(crepe.getMarkdown());
-      crepe.setReadonly(readonly);
       ready = true;
     });
     return () => {
       alive = false;
       void crepe.destroy();
     };
-    // `initial` and `readonly` are mount-time inputs by design.
+    // `initial` is a mount-time input by design.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

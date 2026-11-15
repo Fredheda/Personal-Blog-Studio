@@ -54,43 +54,47 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const autosave = useRef<ReturnType<typeof createAutosave> | null>(null);
   const running = useRef(false); // saveAll() in progress: a second click sends nothing
 
-  function adopt(draft: Draft, parts: { meta?: boolean; body?: boolean } = { meta: true, body: true }) {
-    // A save answers with the whole draft, but only the half just saved is
-    // adopted: taking the other half's newer ETag would let the next save of
-    // that half overwrite a change made in another tab without a 412.
-    setSaved((previous) => {
-      if (previous === null || (parts.meta && parts.body)) return draft;
-      if (parts.meta) {
-        return {
-          ...previous,
-          title: draft.title,
-          slug: draft.slug,
-          summary: draft.summary,
-          tags: draft.tags,
-          coverMediaId: draft.coverMediaId,
-          updatedAt: draft.updatedAt,
-          metaEtag: draft.metaEtag,
-        };
-      }
-      return { ...previous, body: draft.body, bodyEtag: draft.bodyEtag, updatedAt: draft.updatedAt };
-    });
-    if (parts.meta) {
-      setTitle(draft.title);
-      setSlug(draft.slug);
-      setSummary(draft.summary);
-      setTags(draft.tags.join(", "));
-    }
-    if (parts.body) {
-      setBody(draft.body);
-      bodyEtag.current = draft.bodyEtag;
-    }
+  // A freshly loaded post: every field and both ETags.
+  function adoptLoaded(draft: Draft) {
+    setSaved(draft);
+    setTitle(draft.title);
+    setSlug(draft.slug);
+    setSummary(draft.summary);
+    setTags(draft.tags.join(", "));
+    setBody(draft.body);
+    bodyEtag.current = draft.bodyEtag;
+  }
+
+  // The details were saved: the answer carries the whole draft, but only the
+  // details half is adopted. Taking the body's newer ETag would let the next
+  // body save overwrite a change made in another tab without a 412. (The body
+  // side is updated by the autosave callback itself.)
+  function adoptDetails(draft: Draft) {
+    setSaved((previous) =>
+      previous === null
+        ? draft
+        : {
+            ...previous,
+            title: draft.title,
+            slug: draft.slug,
+            summary: draft.summary,
+            tags: draft.tags,
+            coverMediaId: draft.coverMediaId,
+            updatedAt: draft.updatedAt,
+            metaEtag: draft.metaEtag,
+          },
+    );
+    setTitle(draft.title);
+    setSlug(draft.slug);
+    setSummary(draft.summary);
+    setTags(draft.tags.join(", "));
   }
 
   useEffect(() => {
     let alive = true;
     client
       .getPost(id)
-      .then((draft) => alive && adopt(draft))
+      .then((draft) => alive && adoptLoaded(draft))
       .catch((e) => alive && setLoadError(toApiError(e)));
     return () => {
       alive = false;
@@ -178,7 +182,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       if (metaDirty) {
         try {
           const next = await client.patchMeta(id, { title, slug, summary, tags: splitTags(tags) }, saved!.metaEtag);
-          adopt(next, { meta: true });
+          adoptDetails(next);
           setError(null);
         } catch (e) {
           setError(toApiError(e));

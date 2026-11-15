@@ -27,9 +27,3 @@ test("destroying on unmount does not throw and the host is emptied", async () =>
   unmount();
   expect(container.querySelector(".ProseMirror")).toBeNull();
 });
-
-test("a readonly editor cannot be edited", async () => {
-  const { container } = render(<CrepeEditor initial="text" onChange={() => {}} readonly />);
-  await waitFor(() => expect(container.querySelector(".ProseMirror")).not.toBeNull());
-  await waitFor(() => expect(container.querySelector(".ProseMirror")?.getAttribute("contenteditable")).toBe("false"));
-});
