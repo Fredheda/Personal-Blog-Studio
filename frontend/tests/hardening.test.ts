@@ -54,3 +54,27 @@ test("Dockerfile runs as a non-root user and serves the standalone build", () =>
   expect(text).toContain('CMD ["node", "server.js"]');
   expect(text).toContain("EXPOSE 3000");
 });
+
+test("the editor brings no font: no @font-face or url() in Crepe's theme CSS and no KaTeX CSS import", () => {
+  const theme = join(ROOT, "node_modules", "@milkdown", "crepe", "lib", "theme");
+  const cssFiles = walk(theme).filter((f) => f.endsWith(".css"));
+  expect(cssFiles.length).toBeGreaterThan(0);
+  for (const file of cssFiles) {
+    const css = readFileSync(file, "utf8");
+    expect(css, file).not.toMatch(/@font-face/);
+    expect(css, file).not.toMatch(/url\(/);
+  }
+  const sources = [...walk(join(ROOT, "app")), ...walk(join(ROOT, "components")), ...walk(join(ROOT, "lib"))].filter(
+    (f) => /\.(ts|tsx|css)$/.test(f) && !/\.test\.tsx?$/.test(f),
+  );
+  for (const file of sources) {
+    expect(readFileSync(file, "utf8"), file).not.toMatch(/katex(\.min)?\.css|katex\/dist/);
+  }
+});
+
+test("every response carries a CSP that stops remote images and media", async () => {
+  const rules = await nextConfig.headers!();
+  const everyRoute = rules.find((rule) => rule.source === "/:path*")!;
+  const csp = everyRoute.headers.find((h) => h.key === "Content-Security-Policy");
+  expect(csp?.value).toBe("img-src 'self' data: blob:; media-src 'self'");
+});

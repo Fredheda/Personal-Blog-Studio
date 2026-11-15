@@ -25,3 +25,12 @@ button { margin: 0.75rem 0.5rem 0 0; padding: 0.4rem 0.9rem; }
 .muted { color: #666; }
 .problem { border: 1px solid #b00020; padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
 .ok { border: 1px solid #1b7a2e; padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
+.crepe-host {
+  --crepe-font-title: var(--ui-font);
+  --crepe-font-default: var(--ui-font);
+  --crepe-font-code: var(--ui-mono);
+  border: 1px solid #ccc;
+  min-height: 24rem;
+}
+.tabs button[aria-pressed="true"] { font-weight: 700; }
+.status { color: #555; font-size: 0.9rem; }
