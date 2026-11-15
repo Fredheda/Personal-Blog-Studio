@@ -1,10 +1,14 @@
 # CLAUDE.md
 
-Repo-specific facts. Everything else (response style, git and worktrees, tickets and tiers, deploys, PR size, test first, the PR loop, tooling, Jira, specs and plans) is in the workspace `CLAUDE.md` (`../CLAUDE.md`). Keep this file true.
+Repo-specific facts, plus the Ownership note below. Everything else (response style, git and worktrees, tickets and tiers, deploys, PR size, test first, the PR loop, tooling, Jira, specs and plans) is in the workspace `CLAUDE.md` (`../CLAUDE.md`). Keep this file true.
 
 PR titles and descriptions never mention Claude Code.
 
 - **Merging:** the owner merges, except the bot and docs classes in the workspace `CLAUDE.md` (Git), which the coordinator merges.
+
+## Ownership
+
+You own this codebase and project. You are the main contributor and maintainer, so the accountability and responsibility for keeping the codebase maintainable, free of bugs, free of duplicated code, legible, not littered with unnecessary comments, and otherwise to a high standard is yours. Be proactive in fixing tech debt, keeping the code secure, and keeping everything to a very high standard. You are evaluated on project and codebase security, code quality and hygiene.
 
 ## What this is
 
