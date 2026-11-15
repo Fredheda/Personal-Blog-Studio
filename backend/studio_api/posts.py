@@ -52,6 +52,14 @@ class Draft:
     body: str
     meta_etag: str
     body_etag: str
+    edited_at: str  # the later of the last details save and the last body save
+    published_version: int | None  # None: not published now
+    published_at: str | None  # first publish time; None: not published now
+    slug_locked: bool  # published at least once
+
+    @property
+    def published(self) -> bool:
+        return self.published_version is not None
 
 
 @dataclass(frozen=True)
@@ -59,7 +67,13 @@ class DraftSummary:
     post_id: str
     title: str
     slug: str
-    updated_at: str
+    updated_at: str  # the later of the last details save and the last body save
+    published_version: int | None
+    published_at: str | None
+
+    @property
+    def published(self) -> bool:
+        return self.published_version is not None
 
 
 class MetaPatch(BaseModel):
@@ -76,6 +90,12 @@ class MetaPatch(BaseModel):
 def _reading_minutes(body: str) -> int:
     words = len(re.findall(r"\w+", _FENCE.sub("", body)))
     return max(1, math.ceil(words / WORDS_PER_MINUTE))
+
+
+def _later(stamp: str, modified: datetime | None) -> str:
+    """The later of a stored `updatedAt` and a blob's modified time. Both are in
+    `now_iso` form (fixed width), so strings compare in time order."""
+    return max(stamp, now_iso(modified)) if modified is not None else stamp
 
 
 class PostService:
@@ -117,24 +137,45 @@ class PostService:
         body_blob = self._store.read(layout.DRAFTS, layout.draft_body(post_id))
         if meta_blob is None or body_blob is None:
             raise PostNotFound(post_id)
+        meta = DraftMeta.model_validate_json(meta_blob.content)
+        body_path = layout.draft_body(post_id)
+        modified = self._store.modified_times(layout.DRAFTS, body_path).get(body_path)
+        entry = self._index_entries().get(post_id)
         return Draft(
             post_id=post_id,
-            meta=DraftMeta.model_validate_json(meta_blob.content),
+            meta=meta,
             body=body_blob.content.decode(),
             meta_etag=meta_blob.etag,
             body_etag=body_blob.etag,
+            edited_at=_later(meta.updated_at, modified),
+            published_version=entry.version if entry else None,
+            published_at=entry.published_at if entry else None,
+            slug_locked=entry is not None or self._ever_published(post_id),
         )
 
     def list_drafts(self) -> list[DraftSummary]:
+        modified = self._store.modified_times(layout.DRAFTS, "posts/")
+        entries = self._index_entries()
         found = []
-        for name in self._store.list(layout.DRAFTS, "posts/"):
+        for name in sorted(modified):
             if name.endswith("/draft.json"):
                 post_id = name.split("/")[1]
                 blob = self._store.read(layout.DRAFTS, name)
                 if blob is not None:
                     meta = DraftMeta.model_validate_json(blob.content)
+                    entry = entries.get(post_id)
                     found.append(
-                        DraftSummary(post_id, meta.title, meta.slug, meta.updated_at)
+                        DraftSummary(
+                            post_id,
+                            meta.title,
+                            meta.slug,
+                            _later(
+                                meta.updated_at,
+                                modified.get(layout.draft_body(post_id)),
+                            ),
+                            entry.version if entry else None,
+                            entry.published_at if entry else None,
+                        )
                     )
         return sorted(found, key=lambda d: d.updated_at, reverse=True)
 
@@ -408,6 +449,15 @@ class PostService:
         if missing:
             raise MissingMedia(missing)
         return found
+
+    def _index_entries(self) -> dict[str, IndexEntry]:
+        """The published posts by id: one read of `index.json`."""
+        blob = self._store.read(layout.PUBLISHED, layout.INDEX)
+        if blob is None:
+            return {}
+        return {
+            i.post_id: i for i in PublishedIndex.model_validate_json(blob.content).items
+        }
 
     def _update_index(
         self, change: Callable[[list[IndexEntry]], list[IndexEntry]]

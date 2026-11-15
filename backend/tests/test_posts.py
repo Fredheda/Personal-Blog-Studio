@@ -1,9 +1,11 @@
-from datetime import UTC, datetime, timedelta
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 import pytest
 
 from blog_core import layout
-from blog_core.models import MediaMeta
+from blog_core.models import DraftMeta, MediaMeta
+from blog_core.store import Blob
 from studio_api.errors import (
     Conflict,
     MissingMedia,
@@ -16,16 +18,8 @@ from studio_api.errors import (
 )
 from studio_api.markdown import MAX_BODY_BYTES
 from studio_api.posts import MetaPatch, PostService
+from tests.clock import Clock
 from tests.fake_blob_store import InMemoryBlobStore
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = datetime(2026, 11, 10, 12, 0, 0, tzinfo=UTC)
-
-    def __call__(self) -> datetime:
-        self.now += timedelta(seconds=1)
-        return self.now
 
 
 @pytest.fixture
@@ -36,6 +30,24 @@ def store() -> InMemoryBlobStore:
 @pytest.fixture
 def svc(store: InMemoryBlobStore) -> PostService:
     return PostService(store, clock=Clock())
+
+
+class CountingStore(InMemoryBlobStore):
+    def __init__(self, clock: Callable[[], datetime] | None = None) -> None:
+        super().__init__(clock)
+        self.reads: list[tuple[str, str]] = []
+
+    def read(self, container: str, path: str) -> Blob | None:
+        self.reads.append((container, path))
+        return super().read(container, path)
+
+
+@pytest.fixture
+def timed() -> tuple[CountingStore, PostService]:
+    """Store and service on one clock, so a body save and a details save are ordered."""
+    clock = Clock()
+    store = CountingStore(clock)
+    return store, PostService(store, clock=clock)
 
 
 def published_bytes(store: InMemoryBlobStore, path: str) -> bytes:
@@ -295,3 +307,98 @@ def test_delete_refuses_while_published_then_removes_the_draft_folder(
     svc.delete(pid)
     assert store.list(layout.DRAFTS, f"posts/{pid}/") == []
     assert svc.list_drafts() == []
+
+
+def test_a_body_save_moves_updated_at_and_leaves_the_details_etag(timed) -> None:
+    _, svc = timed
+    d = svc.create("Hi")
+    saved = svc.update_body(d.post_id, "More", if_match=d.body_etag)
+    assert saved.edited_at > d.edited_at
+    assert saved.meta_etag == d.meta_etag
+    assert saved.meta.updated_at == d.meta.updated_at
+
+
+def test_a_details_save_moves_updated_at_too(timed) -> None:
+    _, svc = timed
+    d = svc.create("Hi")
+    body = svc.update_body(d.post_id, "More", if_match=d.body_etag)
+    meta = svc.update_meta(d.post_id, MetaPatch(summary="S"), if_match=body.meta_etag)
+    assert meta.edited_at > body.edited_at
+
+
+def test_the_list_is_ordered_by_the_later_edit_and_shows_it(timed) -> None:
+    _, svc = timed
+    a, b = svc.create("A"), svc.create("B")
+    assert [i.post_id for i in svc.list_drafts()] == [b.post_id, a.post_id]
+    edited = svc.update_body(a.post_id, "x", if_match=a.body_etag)
+    items = svc.list_drafts()
+    assert [i.post_id for i in items] == [a.post_id, b.post_id]
+    assert items[0].updated_at == edited.edited_at
+
+
+def test_the_list_reads_the_published_index_once_and_no_body(timed) -> None:
+    store, svc = timed
+    for title in ("A", "B", "C"):
+        svc.create(title)
+    store.reads.clear()
+    svc.list_drafts()
+    assert [r for r in store.reads if r[0] == layout.PUBLISHED] == [
+        (layout.PUBLISHED, layout.INDEX)
+    ]
+    assert not [r for r in store.reads if r[1].endswith("/draft.md")]
+
+
+def test_a_draft_without_a_body_blob_still_lists_with_its_details_time(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    store.write(
+        layout.DRAFTS,
+        layout.draft_meta("01ARZ3NDEKTSV4RRFFQ69G5FAV"),
+        DraftMeta(
+            title="Orphan",
+            created_at="2026-11-10T09:00:00Z",
+            updated_at="2026-11-10T09:00:00Z",
+        ).dump(),
+    )
+    items = svc.list_drafts()
+    assert [(i.title, i.updated_at) for i in items] == [
+        ("Orphan", "2026-11-10T09:00:00Z")
+    ]
+
+
+def test_a_new_draft_is_not_published_and_its_slug_is_free(svc: PostService) -> None:
+    d = svc.create("Hi")
+    assert (d.published, d.published_version, d.published_at, d.slug_locked) == (
+        False,
+        None,
+        None,
+        False,
+    )
+
+
+def test_a_published_post_reports_version_first_publish_time_and_a_locked_slug(
+    svc: PostService,
+) -> None:
+    pid = ready(svc)
+    first = svc.publish(pid, if_match=svc.get(pid).body_etag)
+    d = svc.get(pid)
+    assert d.published and d.published_version == 1
+    assert d.published_at == first.published_at and d.slug_locked
+    svc.update_body(pid, "Changed", if_match=d.body_etag)
+    svc.publish(pid, if_match=svc.get(pid).body_etag)
+    again = svc.get(pid)
+    assert again.published_version == 2 and again.published_at == first.published_at
+    item = next(i for i in svc.list_drafts() if i.post_id == pid)
+    assert item.published and item.published_version == 2
+    assert item.published_at == first.published_at
+
+
+def test_unpublishing_clears_the_status_but_the_slug_stays_locked(
+    svc: PostService,
+) -> None:
+    pid = ready(svc)
+    svc.publish(pid, if_match=svc.get(pid).body_etag)
+    svc.unpublish(pid)
+    d = svc.get(pid)
+    assert not d.published and d.published_version is None and d.published_at is None
+    assert d.slug_locked
