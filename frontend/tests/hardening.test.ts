@@ -69,7 +69,19 @@ test("the editor brings no font: no @font-face or url() in Crepe's theme CSS and
   );
   for (const file of sources) {
     expect(readFileSync(file, "utf8"), file).not.toMatch(/katex(\.min)?\.css|katex\/dist/);
+    // Crepe's aggregate and latex theme files @import KaTeX's stylesheet, which
+    // brings its font files; only the individual parts are allowed.
+    expect(readFileSync(file, "utf8"), file).not.toMatch(/crepe\/theme\/common\/(style|latex)\.css/);
   }
+});
+
+test("the theme part that imports KaTeX's stylesheet is still the only one, so skipping it is enough", () => {
+  const common = join(ROOT, "node_modules", "@milkdown", "crepe", "lib", "theme");
+  const importing = walk(common)
+    .filter((f) => f.endsWith(".css"))
+    .filter((f) => /@import\s+['"]katex/.test(readFileSync(f, "utf8")))
+    .map((f) => f.split(/[\\/]/).pop());
+  expect(importing).toEqual(["latex.css"]);
 });
 
 test("every response carries a CSP that stops remote images and media", async () => {

@@ -117,7 +117,7 @@ test("flush retries the kept text after a failure and answers false while it kee
 
 test("close flushes first and only then stops: text typed during an in-flight save is saved too", async () => {
   const releases: (() => void)[] = [];
-  const save = vi.fn(async () => {
+  const save = vi.fn<(text: string) => Promise<void>>(async () => {
     await new Promise<void>((resolve) => releases.push(resolve));
   });
   const { autosave } = setup(save);

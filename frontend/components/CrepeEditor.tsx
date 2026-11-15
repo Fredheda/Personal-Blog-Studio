@@ -1,6 +1,19 @@
 "use client";
 
-import "@milkdown/crepe/theme/common/style.css";
+// The theme's own `common/style.css` also pulls in `common/latex.css`, which
+// imports KaTeX's stylesheet and with it eight font families. Maths is MathML
+// only here, so the parts are imported one by one, without latex.css, and the
+// two rules the maths editing popup needs live in app/globals.css.
+import "@milkdown/crepe/theme/common/prosemirror.css";
+import "@milkdown/crepe/theme/common/reset.css";
+import "@milkdown/crepe/theme/common/block-edit.css";
+import "@milkdown/crepe/theme/common/code-mirror.css";
+import "@milkdown/crepe/theme/common/cursor.css";
+import "@milkdown/crepe/theme/common/link-tooltip.css";
+import "@milkdown/crepe/theme/common/list-item.css";
+import "@milkdown/crepe/theme/common/placeholder.css";
+import "@milkdown/crepe/theme/common/toolbar.css";
+import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/classic.css";
 
 import { Crepe } from "@milkdown/crepe";
@@ -22,7 +35,9 @@ type Props = {
 export function CrepeEditor({ initial, onChange, readonly = false }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const latestOnChange = useRef(onChange);
-  latestOnChange.current = onChange;
+  useEffect(() => {
+    latestOnChange.current = onChange;
+  });
 
   useEffect(() => {
     const root = host.current;
