@@ -368,6 +368,14 @@ resource webAuth 'Microsoft.App/containerApps/authConfigs@2025-01-01' = {
         '/healthz'
       ]
     }
+    // Easy Auth rejects a cookie-authenticated POST whose Origin is not an
+    // approved external redirect URL. The default hostname is implicitly
+    // approved; the custom domain is not, so Create post got an empty 403.
+    login: {
+      allowedExternalRedirectUrls: empty(webCustomDomain) ? [] : [
+        'https://${webCustomDomain}'
+      ]
+    }
     identityProviders: {
       azureActiveDirectory: {
         enabled: true
