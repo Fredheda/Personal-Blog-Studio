@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -16,7 +17,7 @@ from studio_api.errors import (
     StillPublished,
     ValidationFailed,
 )
-from studio_api.markdown import MAX_BODY_BYTES
+from studio_api.markdown import MAX_BODY_BYTES, Problem
 from studio_api.posts import MetaPatch, PostService
 from tests.clock import Clock
 from tests.fake_blob_store import InMemoryBlobStore
@@ -402,3 +403,96 @@ def test_unpublishing_clears_the_status_but_the_slug_stays_locked(
     d = svc.get(pid)
     assert not d.published and d.published_version is None and d.published_at is None
     assert d.slug_locked
+
+
+FIXTURES = Path(__file__).resolve().parents[2] / "frontend/tests/fixtures/crepe-output"
+BODIES = {
+    "plain": "Hello **world**.",
+    "empty": "",
+    "raw html": "<script>alert(1)</script>",
+    "bad link": "[x](javascript:alert(1))",
+    "remote image": "![a](https://tracker.example/p.png)",
+    "relative link": "[x](/about)",
+    # The editor's own output, once the editor PR has landed (the directory is absent before).
+    **{f"fixture {p.stem}": p.read_text() for p in sorted(FIXTURES.glob("*.md"))},
+}
+
+
+def publish_problems(svc: PostService, post_id: str) -> list[Problem]:
+    try:
+        svc.publish(post_id, if_match=svc.get(post_id).body_etag)
+    except ValidationFailed as e:
+        return e.problems
+    return []
+
+
+@pytest.mark.parametrize("body", BODIES.values(), ids=BODIES.keys())
+def test_check_and_publish_agree(svc: PostService, body: str) -> None:
+    pid = ready(svc, body=body)
+    checked = svc.check(pid)
+    assert checked.problems == publish_problems(svc, pid)
+    assert checked.ok is (not checked.problems)
+
+
+def test_the_editor_fixtures_are_part_of_the_agreement_test() -> None:
+    # The agreement test above only covers the editor's own output when the
+    # fixtures exist; this makes their absence visible and their emptiness fatal.
+    if not FIXTURES.is_dir():
+        pytest.skip(
+            "the editor fixtures arrive with BLOG-30; inline bodies cover until then"
+        )
+    assert list(FIXTURES.glob("*.md")), "the fixtures directory has no .md file"
+
+
+def test_check_of_a_ready_post_is_ok_and_carries_the_current_etags(
+    svc: PostService,
+) -> None:
+    pid = ready(svc)
+    d = svc.get(pid)
+    checked = svc.check(pid)
+    assert checked.ok and checked.problems == []
+    assert (checked.body_etag, checked.meta_etag) == (d.body_etag, d.meta_etag)
+
+
+def test_check_lists_the_missing_title_slug_and_summary_without_a_line(
+    svc: PostService,
+) -> None:
+    pid = svc.create("").post_id
+    assert svc.check(pid).problems[:3] == [
+        Problem(0, "title is required"),
+        Problem(0, "slug is required"),
+        Problem(0, "summary is required"),
+    ]
+
+
+def test_check_reports_missing_media_as_publish_refuses_it(svc: PostService) -> None:
+    pid = ready(svc, body="![a](media:nope)")
+    checked = svc.check(pid)
+    assert not checked.ok
+    assert Problem(0, "media not found: nope") in checked.problems
+    with pytest.raises(MissingMedia):
+        svc.publish(pid, if_match=svc.get(pid).body_etag)
+
+
+def test_check_reports_a_slug_taken_by_another_post(svc: PostService) -> None:
+    first = ready(svc, slug="same")
+    svc.publish(first, if_match=svc.get(first).body_etag)
+    other = ready(svc, slug="same")
+    checked = svc.check(other)
+    assert not checked.ok
+    assert (
+        Problem(0, "the slug same is already used by another post") in checked.problems
+    )
+    assert svc.check(first).ok  # a post's own published slug is not a conflict
+
+
+def test_check_writes_nothing(svc: PostService, store: InMemoryBlobStore) -> None:
+    pid = ready(svc)
+    store.writes.clear()
+    svc.check(pid)
+    assert store.writes == []
+
+
+def test_check_of_an_unknown_post_is_not_found(svc: PostService) -> None:
+    with pytest.raises(PostNotFound):
+        svc.check("01ARZ3NDEKTSV4RRFFQ69G5FAV")
