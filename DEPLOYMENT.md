@@ -67,7 +67,7 @@ Start Azurite (local only) on its default ports, run the contract against it, st
 mkdir -p /tmp/azurite-blog && npx -y azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog &
 cd backend
 export AZURITE_CONNECTION_STRING="UseDevelopmentStorage=true"
-poetry run pytest tests/test_store_contract.py -q   # expect 20 passed
+poetry run pytest tests/test_store_contract.py -q   # expect 24 passed
 lsof -ti :10000 | xargs kill
 ```
 

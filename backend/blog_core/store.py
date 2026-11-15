@@ -6,6 +6,7 @@ in-memory fake used by the unit tests. Both obey the same contract
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 
@@ -52,6 +53,11 @@ class BlobStore(Protocol):
 
     def list(self, container: str, prefix: str) -> list[str]:
         """Names of the blobs whose name starts with `prefix`, sorted."""
+        ...
+
+    def modified_times(self, container: str, prefix: str) -> dict[str, datetime]:
+        """Name to last-modified time (UTC, timezone-aware) of every blob whose
+        name starts with `prefix`. One listing; no blob is read."""
         ...
 
     def copy(
