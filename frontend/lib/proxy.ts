@@ -1,6 +1,19 @@
 import { problemResponse } from "./problem";
 
 export const MAX_BODY_BYTES = 1_048_576;
+// The studio API scales to zero and takes 28 to 30 s to start; 30 s lost the race by a second.
+export const UPSTREAM_TIMEOUT_MS = 60_000;
+export const WAKING_UP = "The studio API is waking up. Try again in a moment.";
+
+/** One log value: printable ASCII only and short, so an upstream cannot forge lines. */
+const clean = (value: string | null) => (value === null ? "-" : value.replace(/[^\x20-\x7e]/g, "?").slice(0, 120));
+
+function logAnswer(method: string, segments: string[], status: number, headers: Headers, length: number) {
+  console.log(
+    `studio proxy: ${method} /${segments.join("/")} ${status} content-type=${clean(headers.get("content-type"))} length=${length} server=${clean(headers.get("server"))} www-authenticate=${clean(headers.get("www-authenticate"))}`,
+  );
+}
+
 const METHODS = new Set(["GET", "PUT", "PATCH", "POST", "DELETE"]);
 const SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
 // Headers the browser may pass on. X-Blog-Studio and Origin are forwarded
@@ -80,13 +93,16 @@ export async function proxy(
         // A redirect is never followed: it would carry the bearer token to
         // another host. Any 3xx is treated as a failure below.
         redirect: "manual",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       },
     );
     if (upstream.status >= 300 && upstream.status < 400) {
+      logAnswer(request.method, segments, upstream.status, upstream.headers, 0);
       console.error("studio proxy: the upstream answered a redirect");
       return problemResponse(502, "Bad Gateway");
     }
+    const payload = upstream.status === 204 ? null : await upstream.arrayBuffer();
+    logAnswer(request.method, segments, upstream.status, upstream.headers, payload?.byteLength ?? 0);
     const out = new Headers({ "cache-control": "no-store" });
     for (const name of RETURNED) {
       const value = upstream.headers.get(name);
@@ -94,11 +110,12 @@ export async function proxy(
     }
     const location = upstream.headers.get("location");
     if (location?.startsWith("/posts/")) out.set("location", `/api/studio${location}`);
-    return new Response(upstream.status === 204 ? null : await upstream.arrayBuffer(), {
-      status: upstream.status,
-      headers: out,
-    });
+    return new Response(payload, { status: upstream.status, headers: out });
   } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      console.error("studio proxy: the upstream did not answer in time");
+      return problemResponse(504, "Gateway Timeout", { "retry-after": "5" }, WAKING_UP);
+    }
     console.error("studio proxy failed:", error instanceof Error ? error.name : "unknown");
     return problemResponse(502, "Bad Gateway");
   }
