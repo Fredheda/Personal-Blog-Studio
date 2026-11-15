@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from studio_api.app import create_app
 from studio_api.posts import PostService
+from tests.clock import Clock
 from tests.fake_blob_store import InMemoryBlobStore
 
 CSRF = {"X-Blog-Studio": "1"}
@@ -53,6 +54,10 @@ def test_create_returns_a_camelcase_draft_with_etags_and_a_location(
         "body",
         "bodyEtag",
         "metaEtag",
+        "published",
+        "version",
+        "publishedAt",
+        "slugLocked",
     } <= set(draft)
     assert draft["title"] == "Hi" and draft["body"] == ""
 
@@ -154,7 +159,85 @@ def test_list_shows_drafts_newest_first(client: TestClient) -> None:
     a, b = new_draft(client, "A"), new_draft(client, "B")
     items = client.get("/posts").json()["items"]
     assert {i["postId"] for i in items} == {a["postId"], b["postId"]}
-    assert set(items[0]) == {"postId", "title", "slug", "updatedAt"}
+    assert set(items[0]) == {
+        "postId",
+        "title",
+        "slug",
+        "updatedAt",
+        "published",
+        "version",
+        "publishedAt",
+    }
+
+
+def test_a_new_draft_reports_not_published(client: TestClient) -> None:
+    d = new_draft(client)
+    assert (d["published"], d["version"], d["publishedAt"], d["slugLocked"]) == (
+        False,
+        None,
+        None,
+        False,
+    )
+
+
+def test_updated_at_moves_after_a_body_save_in_the_draft_and_the_list() -> None:
+    # Store and service share one clock; with the fake's default clock (2026-01-01)
+    # a wrong `updatedAt` mapping would pass unnoticed.
+    clock = Clock()
+    client = TestClient(
+        create_app(PostService(InMemoryBlobStore(clock), clock=clock)), headers=CSRF
+    )
+    d = ready(client)
+    before = client.get(f"/posts/{d['postId']}").json()
+    saved = client.put(
+        f"/posts/{d['postId']}/body",
+        json={"body": "More"},
+        headers={"If-Match": before["bodyEtag"]},
+    ).json()
+    assert saved["updatedAt"] > before["updatedAt"]
+    assert saved["metaEtag"] == before["metaEtag"]
+    assert client.get("/posts").json()["items"][0]["updatedAt"] == saved["updatedAt"]
+
+
+def test_a_published_post_reports_its_status_in_the_draft_and_the_list(
+    client: TestClient,
+) -> None:
+    d = ready(client)
+    published = client.post(
+        f"/posts/{d['postId']}/publish", headers={"If-Match": d["bodyEtag"]}
+    ).json()
+    draft = client.get(f"/posts/{d['postId']}").json()
+    assert draft["published"] is True and draft["version"] == 1
+    assert draft["publishedAt"] == published["publishedAt"]
+    assert draft["slugLocked"] is True
+    item = client.get("/posts").json()["items"][0]
+    assert (item["published"], item["version"]) == (True, 1)
+    assert item["publishedAt"] == published["publishedAt"]
+
+
+def test_check_answers_for_what_is_saved(client: TestClient) -> None:
+    d = ready(client)
+    response = client.get(f"/posts/{d['postId']}/check")
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "problems": [],
+        "bodyEtag": d["bodyEtag"],
+        "metaEtag": d["metaEtag"],
+    }
+
+
+def test_check_lists_problems_with_a_line(client: TestClient) -> None:
+    d = new_draft(client)
+    body = client.get(f"/posts/{d['postId']}/check").json()
+    assert body["ok"] is False
+    assert {"line": 0, "message": "slug is required"} in body["problems"]
+
+
+def test_check_of_an_unknown_post_is_a_404_problem(client: TestClient) -> None:
+    response = client.get(f"/posts/{UNKNOWN}/check")
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/problem+json")
 
 
 def test_saving_the_body_needs_if_match_and_a_stale_one_is_412(
