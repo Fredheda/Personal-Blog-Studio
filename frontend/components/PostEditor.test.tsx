@@ -243,8 +243,10 @@ test("a successful publish says which version went live, and unpublish clears it
   const unpublish = vi.fn(async () => undefined);
   render(<PostEditor id={draft.postId} api={fakeApi({ publish, unpublish })} />);
   fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
-  expect(await screen.findByText(/Published as version 2/)).toBeTruthy();
+  expect(await screen.findByText(/Published as version 2\. It is live at \/blog\/hello\./)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Unpublish" }));
   await waitFor(() => expect(unpublish).toHaveBeenCalledWith(draft.postId));
-  expect(await screen.findByText(/Unpublished/)).toBeTruthy();
+  expect(
+    await screen.findByText(/Unpublished\. \/blog\/hello can stay on the live site for a few seconds\./),
+  ).toBeTruthy();
 });
