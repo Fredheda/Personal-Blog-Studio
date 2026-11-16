@@ -1,3 +1,5 @@
+import "server-only";
+
 import { ManagedIdentityCredential } from "@azure/identity";
 
 let credential: ManagedIdentityCredential | undefined;
