@@ -18,12 +18,14 @@ from markdown_it.token import Token
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 
 from blog_core.ids import is_media_id
+from studio_api.maths import HINT, maths_problem
 
 # Parse time grows faster than linearly on adversarial input, so the cap stays
 # well below what a long article needs (about 40 pages of text).
 MAX_BODY_BYTES = 200_000
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _ANCHOR = re.compile(r"^#[A-Za-z0-9_-]+$")
+_DOLLAR_FENCE = re.compile(r"^ {0,3}\${3,}\s*$")
 _VIDEO = re.compile(r"^::video\{(?P<attrs>.*)\}$")
 # Possessive quantifiers (Python 3.11+): a plain nested `*` backtracks
 # exponentially on `::video{aaaa...!}` and the body limit is 1 MB.
@@ -136,7 +138,52 @@ def validate_body(markdown: str) -> Checked:
             result.problems.append(Problem(line, "raw HTML is not allowed"))
         elif token.type == "inline":
             _check_inline(token, tokens[index - 1] if index else None, line, result)
+    _check_maths(markdown, tokens, result)
     return result
+
+
+def _check_maths(markdown: str, tokens: list[Token], result: Checked) -> None:
+    """One formula per maths block: a `$$$` fence (read differently by this
+    parser and by the renderers, so judged on the source lines), a `$` inside a
+    formula, or a formula that cannot be parsed."""
+    lines = markdown.splitlines()
+    in_code: set[int] = set()
+    for token in tokens:
+        if token.type in ("fence", "code_block") and token.map:
+            in_code.update(range(token.map[0], token.map[1]))
+    fences = [
+        i
+        for i, text in enumerate(lines)
+        if i not in in_code and _DOLLAR_FENCE.match(text)
+    ]
+    spans: list[tuple[int, int]] = []
+    for k in range(0, len(fences), 2):
+        end = fences[k + 1] if k + 1 < len(fences) else len(lines) - 1
+        spans.append((fences[k], end))
+        result.problems.append(
+            Problem(fences[k] + 1, f"maths fence of three or more $ signs: {HINT}")
+        )
+
+    def inside_fence(line0: int) -> bool:
+        return any(first <= line0 <= last for first, last in spans)
+
+    for token in tokens:
+        if not token.map or inside_fence(token.map[0]):
+            continue
+        formulas: list[str] = []
+        if token.type == "math_block":
+            formulas.append(token.content)
+        elif token.type == "inline":
+            formulas += [
+                child.content
+                for child in token.children or []
+                if child.type == "math_inline"
+            ]
+        for source in formulas:
+            message = maths_problem(source)
+            if message:
+                result.problems.append(Problem(token.map[0] + 1, message))
+    result.problems.sort(key=lambda problem: problem.line)
 
 
 def _check_inline(

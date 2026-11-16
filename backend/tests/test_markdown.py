@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from studio_api.markdown import MAX_BODY_BYTES, validate_body
+from studio_api.markdown import MAX_BODY_BYTES, Problem, validate_body
 
 GOOD = """# Title
 
@@ -142,3 +142,46 @@ def test_the_media_ids_of_images_and_videos_are_checked() -> None:
 
 def test_an_oversized_body_is_a_problem() -> None:
     assert messages("a" * (MAX_BODY_BYTES + 1))
+
+
+HINT = "one formula per maths block"
+# Synthetic copy of the owner's saved body. 1-based lines: 3-6 a code fence,
+# 8 inline maths (fine), 10-12 a maths block holding a sentence with $...$,
+# 16 and 23 a $$$ fence pair around two pasted $$ blocks.
+PASTED = (
+    "\n\n```Python\ndef f():\n  pass\n```\n\n"
+    "Euler's identity $e^{i\\pi} + 1 = 0$ links five, and $\\sqrt{2} \\approx 1.414$\n\n"
+    "$$\nEuler's identity $e^{i\\pi} + 1 = 0$ links five constants\n$$\n\n\n\n"
+    "$$$\n$$\nx = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\n$$\n$$\n"
+    "\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}\n$$\n$$$\n"
+)
+
+
+def test_pasted_maths_is_flagged_once_per_block_with_its_line() -> None:
+    assert validate_body(PASTED).problems == [
+        Problem(10, f"maths contains an unescaped $: {HINT}"),
+        Problem(16, f"maths fence of three or more $ signs: {HINT}"),
+    ]
+
+
+def test_a_dollar_fence_inside_a_code_fence_is_code() -> None:
+    assert validate_body("```\n$$$\n```\n").problems == []
+
+
+def test_an_unpaired_dollar_fence_is_reported_once() -> None:
+    assert validate_body("a\n\n$$$\n$$\nx\n$$\n").problems == [
+        Problem(3, f"maths fence of three or more $ signs: {HINT}")
+    ]
+
+
+def test_inline_and_block_maths_with_a_structural_error_report_their_line() -> None:
+    body = "ok $\\frac{1}{2$ here\n\n$$\n\\begin{cases} x\n$$\n"
+    assert validate_body(body).problems == [
+        Problem(1, f"maths does not parse (unbalanced braces): {HINT}"),
+        Problem(3, f"maths does not parse (\\begin{{cases}} has no \\end): {HINT}"),
+    ]
+
+
+def test_one_formula_per_block_is_fine() -> None:
+    body = "A $x^2$ and\n\n$$\nx = \\frac{1}{2}\n$$\n\n$$\ny = \\sqrt{2}\n$$\n"
+    assert validate_body(body).problems == []
