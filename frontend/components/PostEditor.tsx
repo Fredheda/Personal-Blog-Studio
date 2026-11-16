@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { createAutosave, type AutosaveStatus } from "../lib/autosave";
+import { publishedNotice, unpublishedNotice } from "../lib/live-status";
 import { ApiError } from "../lib/problem";
 import { createStudioApi, type Draft, type StudioApi } from "../lib/studio-api";
 import { Preview } from "./Preview";
@@ -264,7 +265,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         onClick={() =>
           run(async () => {
             const published = await client.publish(id, bodyEtag.current);
-            setNotice(`Published as version ${published.version}.`);
+            setNotice(publishedNotice(published.version, published.slug));
           })
         }
       >
@@ -275,7 +276,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         onClick={() =>
           run(async () => {
             await client.unpublish(id);
-            setNotice("Unpublished.");
+            setNotice(unpublishedNotice(saved.slug));
           })
         }
       >

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { postStatus } from "../lib/live-status";
 import { ApiError } from "../lib/problem";
 import { createStudioApi, type ListItem, type StudioApi } from "../lib/studio-api";
 import { ProblemList } from "./ProblemList";
@@ -59,7 +60,7 @@ export function Posts({ api }: { api?: StudioApi }) {
           {items.map((post) => (
             <li key={post.postId}>
               <Link href={`/posts/${post.postId}`}>{post.title || "(untitled)"}</Link>
-              <span className="muted">{post.slug ? ` /${post.slug}` : ""} · {post.updatedAt}</span>
+              <span className="muted">{post.slug ? ` /${post.slug}` : ""} · {postStatus(post)} · {post.updatedAt}</span>
             </li>
           ))}
         </ul>

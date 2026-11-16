@@ -267,6 +267,14 @@ def test_slug_is_locked_after_first_publish(svc: PostService) -> None:
         svc.update_meta(pid, MetaPatch(slug="other"), if_match=svc.get(pid).meta_etag)
 
 
+def test_the_slug_stays_locked_after_unpublish(svc: PostService) -> None:
+    pid = ready(svc)
+    svc.publish(pid, if_match=svc.get(pid).body_etag)
+    svc.unpublish(pid)
+    with pytest.raises(SlugLocked):
+        svc.update_meta(pid, MetaPatch(slug="other"), if_match=svc.get(pid).meta_etag)
+
+
 def test_index_update_retries_on_a_concurrent_change(store: InMemoryBlobStore) -> None:
     svc = PostService(store, clock=Clock())
     pid = ready(svc)

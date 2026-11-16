@@ -71,6 +71,19 @@ test("lists the posts with a link to each editor", async () => {
   expect(screen.getByRole("link", { name: "(untitled)" })).toBeTruthy();
 });
 
+test("each row says whether the post is live; a post published and then unpublished is a draft", async () => {
+  const base = { updatedAt: "2026-11-10T10:00:00Z", versionPublishedAt: null };
+  const api = fakeApi({
+    listPosts: async () => [
+      { ...base, postId: "01AAAAAAAAAAAAAAAAAAAAAAAA", title: "Live", slug: "live", published: true, version: 1, publishedAt: "2026-11-10T09:00:00Z" },
+      { ...base, postId: "01BBBBBBBBBBBBBBBBBBBBBBBB", title: "Off", slug: "off", published: false, version: null, publishedAt: null },
+    ],
+  });
+  render(<Posts api={api} />);
+  expect(await screen.findByText(/Published, version 1/)).toBeTruthy();
+  expect(screen.getByText(/Draft/)).toBeTruthy();
+});
+
 test("says so when there are no posts", async () => {
   render(<Posts api={fakeApi()} />);
   expect(await screen.findByText("No posts yet.")).toBeTruthy();
