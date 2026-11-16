@@ -52,6 +52,35 @@ class Draft:
     body: str
     meta_etag: str
     body_etag: str
+    edited_at: str  # the later of the last details save and the last body save
+    published_version: int | None  # None: not published now
+    published_at: str | None  # first publish time; None: not published now
+    version_published_at: str | None  # when the current version went live
+    slug_locked: bool  # published at least once
+
+    @property
+    def published(self) -> bool:
+        return self.published_version is not None
+
+
+@dataclass(frozen=True)
+class CheckResult:
+    ok: bool
+    problems: list[Problem]
+    body_etag: str
+    meta_etag: str
+
+
+@dataclass(frozen=True)
+class _Blockers:
+    """Everything publish refuses on, collected without raising."""
+
+    problems: list[Problem]  # title, slug, summary and the Markdown rules
+    media_ids: list[str]
+    media: dict[str, MediaMeta]
+    missing_media: list[str]
+    slug_blob: Blob | None
+    slug_taken: bool
 
 
 @dataclass(frozen=True)
@@ -59,7 +88,14 @@ class DraftSummary:
     post_id: str
     title: str
     slug: str
-    updated_at: str
+    updated_at: str  # the later of the last details save and the last body save
+    published_version: int | None
+    published_at: str | None
+    version_published_at: str | None
+
+    @property
+    def published(self) -> bool:
+        return self.published_version is not None
 
 
 class MetaPatch(BaseModel):
@@ -76,6 +112,12 @@ class MetaPatch(BaseModel):
 def _reading_minutes(body: str) -> int:
     words = len(re.findall(r"\w+", _FENCE.sub("", body)))
     return max(1, math.ceil(words / WORDS_PER_MINUTE))
+
+
+def _later(stamp: str, modified: datetime | None) -> str:
+    """The later of a stored `updatedAt` and a blob's modified time. Both are in
+    `now_iso` form (fixed width), so strings compare in time order."""
+    return max(stamp, now_iso(modified)) if modified is not None else stamp
 
 
 class PostService:
@@ -117,24 +159,47 @@ class PostService:
         body_blob = self._store.read(layout.DRAFTS, layout.draft_body(post_id))
         if meta_blob is None or body_blob is None:
             raise PostNotFound(post_id)
+        meta = DraftMeta.model_validate_json(meta_blob.content)
+        body_path = layout.draft_body(post_id)
+        modified = self._store.modified_times(layout.DRAFTS, body_path).get(body_path)
+        entry = self._index_entries().get(post_id)
         return Draft(
             post_id=post_id,
-            meta=DraftMeta.model_validate_json(meta_blob.content),
+            meta=meta,
             body=body_blob.content.decode(),
             meta_etag=meta_blob.etag,
             body_etag=body_blob.etag,
+            edited_at=_later(meta.updated_at, modified),
+            published_version=entry.version if entry else None,
+            published_at=entry.published_at if entry else None,
+            version_published_at=entry.updated_at if entry else None,
+            slug_locked=entry is not None or self._ever_published(post_id),
         )
 
     def list_drafts(self) -> list[DraftSummary]:
+        modified = self._store.modified_times(layout.DRAFTS, "posts/")
+        entries = self._index_entries()
         found = []
-        for name in self._store.list(layout.DRAFTS, "posts/"):
+        for name in sorted(modified):
             if name.endswith("/draft.json"):
                 post_id = name.split("/")[1]
                 blob = self._store.read(layout.DRAFTS, name)
                 if blob is not None:
                     meta = DraftMeta.model_validate_json(blob.content)
+                    entry = entries.get(post_id)
                     found.append(
-                        DraftSummary(post_id, meta.title, meta.slug, meta.updated_at)
+                        DraftSummary(
+                            post_id,
+                            meta.title,
+                            meta.slug,
+                            _later(
+                                meta.updated_at,
+                                modified.get(layout.draft_body(post_id)),
+                            ),
+                            entry.version if entry else None,
+                            entry.published_at if entry else None,
+                            entry.updated_at if entry else None,
+                        )
                     )
         return sorted(found, key=lambda d: d.updated_at, reverse=True)
 
@@ -249,29 +314,18 @@ class PostService:
         if draft.body_etag != if_match:
             raise StaleEtag("the draft changed; reload it")
         meta = draft.meta
-        problems = [
-            Problem(0, f"{name} is required")
-            for name, value in (
-                ("title", meta.title),
-                ("slug", meta.slug),
-                ("summary", meta.summary),
-            )
-            if not value.strip()
-        ]
-        checked = validate_body(draft.body)
-        problems += checked.problems
-        if problems:
-            raise ValidationFailed(problems)
-
-        media_ids = list(checked.media_ids)
-        if meta.cover_media_id and meta.cover_media_id not in media_ids:
-            media_ids.append(meta.cover_media_id)
-        media = self._load_media(media_ids)
-
-        slug_blob = self._store.read(layout.PUBLISHED, layout.slug_ref(meta.slug))
-        if slug_blob is not None:
-            if SlugRef.model_validate_json(slug_blob.content).post_id != post_id:
-                raise SlugTaken(meta.slug)
+        blockers = self._blockers(draft)
+        if blockers.problems:
+            raise ValidationFailed(blockers.problems)
+        if blockers.missing_media:
+            raise MissingMedia(blockers.missing_media)
+        if blockers.slug_taken:
+            raise SlugTaken(meta.slug)
+        media_ids, media, slug_blob = (
+            blockers.media_ids,
+            blockers.media,
+            blockers.slug_blob,
+        )
 
         version = self._latest_version(post_id) + 1
         self.checkpoint(post_id)
@@ -357,6 +411,21 @@ class PostService:
         self._update_index(lambda items: [i for i in items if i.post_id != post_id])
         self._store.delete(layout.PUBLISHED, layout.slug_ref(draft.meta.slug))
 
+    def check(self, post_id: str) -> CheckResult:
+        """What publish would refuse on, for what is saved. Writes nothing."""
+        draft = self.get(post_id)
+        blockers = self._blockers(draft)
+        problems = list(blockers.problems)
+        if blockers.missing_media:
+            problems.append(Problem(0, str(MissingMedia(blockers.missing_media))))
+        if blockers.slug_taken:
+            problems.append(
+                Problem(
+                    0, f"the slug {draft.meta.slug} is already used by another post"
+                )
+            )
+        return CheckResult(not problems, problems, draft.body_etag, draft.meta_etag)
+
     # helpers ----------------------------------------------------------------
 
     def _require(self, post_id: str) -> None:
@@ -396,18 +465,52 @@ class PostService:
                 return PublishedMeta.model_validate_json(blob.content).published_at
         return None
 
-    def _load_media(self, media_ids: list[str]) -> dict[str, MediaMeta]:
-        found: dict[str, MediaMeta] = {}
+    def _blockers(self, draft: Draft) -> _Blockers:
+        """The one place publish's rules live: publish raises on them, check lists them."""
+        meta = draft.meta
+        problems = [
+            Problem(0, f"{name} is required")
+            for name, value in (
+                ("title", meta.title),
+                ("slug", meta.slug),
+                ("summary", meta.summary),
+            )
+            if not value.strip()
+        ]
+        checked = validate_body(draft.body)
+        problems += checked.problems
+
+        media_ids = list(checked.media_ids)
+        if meta.cover_media_id and meta.cover_media_id not in media_ids:
+            media_ids.append(meta.cover_media_id)
+        media: dict[str, MediaMeta] = {}
         missing = []
         for media_id in media_ids:
             blob = self._store.read(layout.DRAFTS, layout.media_meta(media_id))
             if blob is None:
                 missing.append(media_id)
             else:
-                found[media_id] = MediaMeta.model_validate_json(blob.content)
-        if missing:
-            raise MissingMedia(missing)
-        return found
+                media[media_id] = MediaMeta.model_validate_json(blob.content)
+
+        slug_blob = (
+            self._store.read(layout.PUBLISHED, layout.slug_ref(meta.slug))
+            if meta.slug
+            else None
+        )
+        taken = (
+            slug_blob is not None
+            and SlugRef.model_validate_json(slug_blob.content).post_id != draft.post_id
+        )
+        return _Blockers(problems, media_ids, media, missing, slug_blob, taken)
+
+    def _index_entries(self) -> dict[str, IndexEntry]:
+        """The published posts by id: one read of `index.json`."""
+        blob = self._store.read(layout.PUBLISHED, layout.INDEX)
+        if blob is None:
+            return {}
+        return {
+            i.post_id: i for i in PublishedIndex.model_validate_json(blob.content).items
+        }
 
     def _update_index(
         self, change: Callable[[list[IndexEntry]], list[IndexEntry]]

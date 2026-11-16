@@ -107,3 +107,21 @@ def test_copy_of_a_missing_source_raises_store_error_and_writes_nothing(stores) 
     with pytest.raises(StoreError):
         store.copy(a, "media/none/original.png", b, "posts/p/v1/media/none.png")
     assert store.read(b, "posts/p/v1/media/none.png") is None
+
+
+def test_modified_times_lists_names_under_a_prefix_with_aware_datetimes(stores) -> None:
+    store, a, _ = stores
+    store.write(a, "p/one.txt", b"1")
+    store.write(a, "p/two.txt", b"2")
+    store.write(a, "q/three.txt", b"3")
+    found = store.modified_times(a, "p/")
+    assert sorted(found) == ["p/one.txt", "p/two.txt"]
+    assert all(t.tzinfo is not None for t in found.values())
+
+
+def test_a_rewrite_never_moves_the_modified_time_back(stores) -> None:
+    store, a, _ = stores
+    store.write(a, "f", b"1")
+    first = store.modified_times(a, "f")["f"]
+    store.write(a, "f", b"2")
+    assert store.modified_times(a, "f")["f"] >= first

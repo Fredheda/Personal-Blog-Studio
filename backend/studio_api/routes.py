@@ -57,6 +57,23 @@ class DraftOut(CamelModel):
     body: str
     body_etag: str
     meta_etag: str
+    published: bool
+    version: int | None
+    published_at: str | None
+    version_published_at: str | None
+    slug_locked: bool
+
+
+class ProblemOut(CamelModel):
+    line: int
+    message: str
+
+
+class CheckOut(CamelModel):
+    ok: bool
+    problems: list[ProblemOut]
+    body_etag: str
+    meta_etag: str
 
 
 def _draft_out(draft: Draft) -> dict:
@@ -69,10 +86,15 @@ def _draft_out(draft: Draft) -> dict:
         tags=meta.tags,
         cover_media_id=meta.cover_media_id,
         created_at=meta.created_at,
-        updated_at=meta.updated_at,
+        updated_at=draft.edited_at,
         body=draft.body,
         body_etag=draft.body_etag,
         meta_etag=draft.meta_etag,
+        published=draft.published,
+        version=draft.published_version,
+        published_at=draft.published_at,
+        version_published_at=draft.version_published_at,
+        slug_locked=draft.slug_locked,
     ).model_dump(by_alias=True)
 
 
@@ -138,6 +160,10 @@ def create_router() -> APIRouter:
                     "title": d.title,
                     "slug": d.slug,
                     "updatedAt": d.updated_at,
+                    "published": d.published,
+                    "version": d.published_version,
+                    "publishedAt": d.published_at,
+                    "versionPublishedAt": d.version_published_at,
                 }
                 for d in service.list_drafts()
             ]
@@ -146,6 +172,18 @@ def create_router() -> APIRouter:
     @router.get("/posts/{post_id}")
     def get(post_id: PostId, service: Service) -> dict:
         return _draft_out(service.get(post_id))
+
+    @router.get("/posts/{post_id}/check")
+    def check(post_id: PostId, service: Service) -> dict:
+        result = service.check(post_id)
+        return CheckOut(
+            ok=result.ok,
+            problems=[
+                ProblemOut(line=p.line, message=p.message) for p in result.problems
+            ],
+            body_etag=result.body_etag,
+            meta_etag=result.meta_etag,
+        ).model_dump(by_alias=True)
 
     @router.put("/posts/{post_id}/body")
     def put_body(

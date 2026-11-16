@@ -1,6 +1,15 @@
 import { ApiError, type Problem } from "./problem";
 
-export type ListItem = { postId: string; title: string; slug: string; updatedAt: string };
+export type ListItem = {
+  postId: string;
+  title: string;
+  slug: string;
+  updatedAt: string;
+  published: boolean;
+  version: number | null;
+  publishedAt: string | null;
+  versionPublishedAt: string | null;
+};
 export type Draft = {
   postId: string;
   title: string;
@@ -13,6 +22,11 @@ export type Draft = {
   body: string;
   bodyEtag: string;
   metaEtag: string;
+  published: boolean;
+  version: number | null;
+  publishedAt: string | null;
+  versionPublishedAt: string | null;
+  slugLocked: boolean;
 };
 export type MetaPatch = {
   title?: string;
@@ -29,6 +43,12 @@ export type Published = {
   publishedAt: string;
   updatedAt: string;
 };
+export type CheckResult = {
+  ok: boolean;
+  problems: { line: number; message: string }[];
+  bodyEtag: string;
+  metaEtag: string;
+};
 
 export type StudioApi = {
   listPosts(): Promise<ListItem[]>;
@@ -38,6 +58,8 @@ export type StudioApi = {
   patchMeta(id: string, patch: MetaPatch, ifMatch: string): Promise<Draft>;
   publish(id: string, ifMatch: string): Promise<Published>;
   unpublish(id: string): Promise<void>;
+  checkPost(id: string): Promise<CheckResult>;
+  deletePost(id: string): Promise<void>;
 };
 
 const BASE = "/api/studio/posts";
@@ -86,5 +108,7 @@ export function createStudioApi(fetchImpl: typeof fetch = (...args) => fetch(...
     patchMeta: (id, patch, ifMatch) => call("PATCH", `/${id}/meta`, { body: patch, ifMatch }),
     publish: (id, ifMatch) => call("POST", `/${id}/publish`, { ifMatch }),
     unpublish: (id) => call("POST", `/${id}/unpublish`),
+    checkPost: (id) => call("GET", `/${id}/check`),
+    deletePost: (id) => call("DELETE", `/${id}`),
   };
 }

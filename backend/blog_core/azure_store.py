@@ -5,6 +5,7 @@ connection string); the connection-string constructor exists for Azurite.
 """
 
 import time
+from datetime import datetime
 
 from azure.core import MatchConditions
 from azure.core.exceptions import (
@@ -94,6 +95,14 @@ class AzureBlobStore:
     def list(self, container: str, prefix: str) -> list[str]:
         client = self.service.get_container_client(container)
         return sorted(b.name for b in client.list_blobs(name_starts_with=prefix))
+
+    def modified_times(self, container: str, prefix: str) -> dict[str, datetime]:
+        client = self.service.get_container_client(container)
+        return {
+            b.name: b.last_modified
+            for b in client.list_blobs(name_starts_with=prefix)
+            if b.last_modified is not None
+        }
 
     def copy(
         self, src_container: str, src_path: str, dst_container: str, dst_path: str

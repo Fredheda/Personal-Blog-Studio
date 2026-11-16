@@ -41,6 +41,26 @@ test("a 204 answers undefined", async () => {
   await expect(api.unpublish("ID")).resolves.toBeUndefined();
 });
 
+test("checkPost reads /check with GET and sends no body", async () => {
+  const { api, fetchImpl } = mock(
+    Response.json({ ok: false, problems: [{ line: 0, message: "slug is required" }], bodyEtag: '"b"', metaEtag: '"m"' }),
+  );
+  const result = await api.checkPost("ID");
+  const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+  expect(url).toBe("/api/studio/posts/ID/check");
+  expect(init.method).toBe("GET");
+  expect(init.body).toBeUndefined();
+  expect(result.problems).toEqual([{ line: 0, message: "slug is required" }]);
+});
+
+test("deletePost sends DELETE and a 204 answers undefined", async () => {
+  const { api, fetchImpl } = mock(new Response(null, { status: 204 }));
+  await expect(api.deletePost("ID")).resolves.toBeUndefined();
+  const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+  expect(url).toBe("/api/studio/posts/ID");
+  expect(init.method).toBe("DELETE");
+});
+
 test("a problem response becomes an ApiError with its status and problem lines", async () => {
   const body = { type: "about:blank", title: "Unprocessable Content", status: 422, problems: [{ line: 3, message: "raw HTML is not allowed" }] };
   const { api } = mock(new Response(JSON.stringify(body), { status: 422, headers: { "content-type": "application/problem+json" } }));
