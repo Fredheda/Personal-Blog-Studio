@@ -426,6 +426,8 @@ BODIES = {
     "bad link": "[x](javascript:alert(1))",
     "remote image": "![a](https://tracker.example/p.png)",
     "relative link": "[x](/about)",
+    "pasted maths": "$$\nEuler's identity $e^{i\\pi}$ here\n$$\n",
+    "unbalanced maths": "$$\n\\frac{1}{2\n$$\n",
     # The editor's own output, once the editor PR has landed (the directory is absent before).
     **{f"fixture {p.stem}": p.read_text() for p in sorted(FIXTURES.glob("*.md"))},
 }
@@ -497,6 +499,16 @@ def test_check_reports_a_slug_taken_by_another_post(svc: PostService) -> None:
         Problem(0, "the slug same is already used by another post") in checked.problems
     )
     assert svc.check(first).ok  # a post's own published slug is not a conflict
+
+
+def test_check_reports_broken_maths_with_its_line(svc: PostService) -> None:
+    pid = ready(svc, body="intro\n\n$$\n\\frac{1}{2\n$$\n")
+    assert (
+        Problem(
+            3, "maths does not parse (unbalanced braces): one formula per maths block"
+        )
+        in svc.check(pid).problems
+    )
 
 
 def test_check_writes_nothing(svc: PostService, store: InMemoryBlobStore) -> None:
