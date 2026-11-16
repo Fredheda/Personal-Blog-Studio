@@ -4,7 +4,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   return (
     <main>
-      <PostEditor id={id} />
+      <PostEditor key={id} id={id} />
     </main>
   );
 }
