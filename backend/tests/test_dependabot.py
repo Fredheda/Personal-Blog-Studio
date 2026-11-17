@@ -23,7 +23,7 @@ def test_the_four_ecosystems_are_each_configured_once() -> None:
 def test_every_directory_exists_and_holds_the_manifest_dependabot_reads() -> None:
     expected = {
         "pip": ["/backend"],
-        "npm": ["/frontend"],
+        "npm": ["/frontend", "/frontend/e2e/azurite"],
         "github-actions": ["/"],
         "docker": ["/backend", "/frontend"],
     }

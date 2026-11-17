@@ -1,5 +1,8 @@
 node_modules
+e2e/azurite/node_modules
 .next
+playwright-report
+test-results
 npm-debug.log*
 Dockerfile
 .dockerignore

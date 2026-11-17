@@ -100,3 +100,59 @@ jobs:
       # The build writes next-env.d.ts, which tsc needs, so it runs first.
       - run: npm run build
       - run: npx tsc --noEmit
+
+  # Browser tests: Playwright drives the production build in Chromium against
+  # the real studio API on Azurite (no Azure). A draft PR skips it; see
+  # CLAUDE.md, "Browser tests".
+  frontend-e2e:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Poetry
+        run: pipx install "poetry>=2.0,<3.0"
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: backend/.python-version
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+      - run: poetry install --no-interaction
+        working-directory: backend
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            frontend/e2e/azurite/package-lock.json
+      - run: npm install -g npm@12.2.2 && npm --version
+      - run: npm ci
+        working-directory: frontend
+      # Browser binaries are cached per lockfile (the Playwright version lives in
+      # it); the OS packages are installed on every run. Azurite's own locked
+      # install is cached by its lockfile hash.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+      - uses: actions/cache@v6
+        id: azurite
+        with:
+          path: frontend/e2e/azurite/node_modules
+          key: azurite-${{ runner.os }}-${{ hashFiles('frontend/e2e/azurite/package-lock.json') }}
+      - run: npm ci --prefix e2e/azurite
+        if: steps.azurite.outputs.cache-hit != 'true'
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run e2e
+        working-directory: frontend
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
