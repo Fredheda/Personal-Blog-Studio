@@ -61,17 +61,17 @@ Limits: the registry is in legacy permission mode, so pushes cannot be scoped pe
 
 ### Storage tests against Azurite
 
-Start Azurite (local only) on its default ports, run the contract against it, stop it. `UseDevelopmentStorage=true` is the SDK's shorthand for Azurite's built-in development account, so no key is written down here (a spelled-out key trips the secret scan even though it is public).
+Start Azurite (local only) on its default ports, run the contract against it, stop it. Azurite is the locked package of the browser tests (`frontend/e2e/azurite/`; `cd frontend && npm run e2e:install` installs it from its lockfile): never a bare `npx`. `UseDevelopmentStorage=true` is the SDK's shorthand for Azurite's built-in development account, so no key is written down here (a spelled-out key trips the secret scan even though it is public).
 
 ```bash
-mkdir -p /tmp/azurite-blog && npx -y azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog &
+mkdir -p /tmp/azurite-blog && frontend/e2e/azurite/node_modules/.bin/azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog &
 cd backend
 export AZURITE_CONNECTION_STRING="UseDevelopmentStorage=true"
 poetry run pytest tests/test_store_contract.py -q   # expect 24 passed
 lsof -ti :10000 | xargs kill
 ```
 
-CI does not run Azurite; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change.
+CI runs Azurite only for the browser tests; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change.
 
 ## Gotchas
 
