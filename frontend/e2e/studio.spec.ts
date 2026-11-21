@@ -91,15 +91,32 @@ test("the top bar leads back to the list and marks the current page", async ({ p
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("the Preview shows a table with a grid and a boxed code block", async ({ page, request }) => {
-  const body = "| a | b |\n| - | - |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n";
-  const { postId } = await createPost(request, { title: unique("Table"), body });
+test("the Preview shows headings, lists, links, maths, a table and a boxed code block", async ({ page, request }) => {
+  const body =
+    "# Big\n\n- one\n- two\n\nA [link](https://example.com) and $a^2$.\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n";
+  const { postId } = await createPost(request, { title: unique("Elements"), body });
   await page.goto(`/posts/${postId}`);
   await page.getByRole("button", { name: "Preview" }).click();
-  await expect(page.locator(".preview th").first()).toHaveCSS("font-weight", "700");
-  await expect(page.locator(".preview th").first()).toHaveCSS("background-color", "rgb(238, 238, 238)");
-  await expect(page.locator(".preview td").first()).toHaveCSS("border-top-width", "1px");
-  await expect(page.locator(".preview pre")).toHaveCSS("overflow-x", "auto");
+  await expect(page.locator(".post-body h1")).toHaveCSS("font-size", "33px");
+  await expect(page.locator(".post-body ul")).toHaveCSS("list-style-type", "disc");
+  await expect(page.locator(".post-body a")).toHaveCSS("text-decoration-line", "underline");
+  await expect(page.locator(".post-body math")).toHaveCount(1);
+  await expect(page.locator(".post-body th").first()).toHaveCSS("font-weight", "600");
+  await expect(page.locator(".post-body th").first()).toHaveCSS("background-color", "rgb(32, 36, 45)");
+  await expect(page.locator(".post-body td").first()).toHaveCSS("border-top-width", "1px");
+  await expect(page.locator(".post-body pre")).toHaveCSS("overflow-x", "auto");
+  await expect(page.locator(".post-body pre")).toHaveCSS("background-color", "rgb(11, 13, 17)");
+});
+
+test("the Preview colours Python code with the token colours, also for a capital-P fence", async ({ page, request }) => {
+  const body = "```Python\ndef f():\n    return True\n\nprint(f(), 1)\n```\n";
+  const { postId } = await createPost(request, { title: unique("Code"), body });
+  await page.goto(`/posts/${postId}`);
+  await page.getByRole("button", { name: "Preview" }).click();
+  await expect(page.locator(".post-body .hljs-keyword").first()).toHaveCSS("color", "rgb(185, 168, 255)");
+  await expect(page.locator(".post-body .hljs-literal")).toHaveCSS("color", "rgb(255, 196, 107)");
+  await expect(page.locator(".post-body .hljs-number")).toHaveCSS("color", "rgb(255, 196, 107)");
+  await expect(page.locator(".post-body .hljs-built_in")).toHaveCSS("color", "rgb(127, 224, 255)");
 });
 
 test("Delete removes a draft after one question and a published post after two", async ({ page, request }) => {
