@@ -54,6 +54,13 @@ async function readCapped(request: Request, max: number): Promise<Uint8Array<Arr
   return out;
 }
 
+/** The one query the proxy passes on: `confirm=published` on DELETE /posts/{id}. */
+function upstreamQuery(request: Request, segments: string[]): string {
+  if (request.method !== "DELETE" || segments.length !== 2) return "";
+  const confirm = new URL(request.url).searchParams.getAll("confirm");
+  return confirm.length === 1 && confirm[0] === "published" ? "?confirm=published" : "";
+}
+
 export async function proxy(
   request: Request,
   segments: string[],
@@ -85,7 +92,7 @@ export async function proxy(
     }
     headers.set("authorization", `Bearer ${await deps.getToken()}`);
     const upstream = await (deps.fetchImpl ?? fetch)(
-      `${deps.upstream.replace(/\/$/, "")}/${segments.join("/")}`,
+      `${deps.upstream.replace(/\/$/, "")}/${segments.join("/")}${upstreamQuery(request, segments)}`,
       {
         method: request.method,
         headers,

@@ -57,6 +57,35 @@ describe("forwarding", () => {
     expect(calls[0].url).toBe(url);
     expect(calls[0].init.method).toBe(method);
   });
+});
+
+describe("the confirm query", () => {
+  test("DELETE posts/ID?confirm=published passes exactly that query on", async () => {
+    const { calls, deps } = setup();
+    await proxy(req("DELETE", "/api/studio/posts/ID?confirm=published"), ["posts", "ID"], deps);
+    expect(calls[0].url).toBe("http://studio-api/posts/ID?confirm=published");
+  });
+
+  test("other keys next to it are dropped", async () => {
+    const { calls, deps } = setup();
+    await proxy(req("DELETE", "/api/studio/posts/ID?x=1&confirm=published"), ["posts", "ID"], deps);
+    expect(calls[0].url).toBe("http://studio-api/posts/ID?confirm=published");
+  });
+
+  test.each([
+    ["DELETE", "/api/studio/posts/ID?confirm=yes", ["posts", "ID"]],
+    ["DELETE", "/api/studio/posts/ID?confirm=published&confirm=other", ["posts", "ID"]],
+    ["DELETE", "/api/studio/posts/ID?x=1", ["posts", "ID"]],
+    ["GET", "/api/studio/posts/ID?confirm=published", ["posts", "ID"]],
+    ["POST", "/api/studio/posts/ID/publish?confirm=published", ["posts", "ID", "publish"]],
+    ["DELETE", "/api/studio/posts/ID/check?confirm=published", ["posts", "ID", "check"]],
+    ["DELETE", "/api/studio/posts?confirm=published", ["posts"]],
+  ])("%s %s never forwards a query", async (method, path, segments) => {
+    const { calls, deps } = setup();
+    await proxy(req(method, path), segments, deps);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(`http://studio-api/${segments.join("/")}`);
+  });
 
   test("adds the bearer token, keeps X-Blog-Studio and Origin as sent, drops the rest", async () => {
     const { calls, deps } = setup();
