@@ -2,7 +2,7 @@
 import { expect, test, vi } from "vitest";
 
 import { ApiError } from "./problem";
-import { createStudioApi } from "./studio-api";
+import { createStudioApi, isConfirmationRequired } from "./studio-api";
 
 function mock(response: Response) {
   const fetchImpl = vi.fn(async () => response) as unknown as typeof fetch;
@@ -59,6 +59,26 @@ test("deletePost sends DELETE and a 204 answers undefined", async () => {
   const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
   expect(url).toBe("/api/studio/posts/ID");
   expect(init.method).toBe("DELETE");
+});
+
+test("deletePost with confirm sends confirm=published", async () => {
+  const { api, fetchImpl } = mock(new Response(null, { status: 204 }));
+  await api.deletePost("ID", { confirm: "published" });
+  const [url] = fetchImpl.mock.calls[0] as [string, RequestInit];
+  expect(url).toBe("/api/studio/posts/ID?confirm=published");
+});
+
+test("isConfirmationRequired tells the confirmation 409 from other errors", () => {
+  const confirm = new ApiError(409, {
+    type: "urn:blog-studio:confirmation-required",
+    title: "Confirmation required",
+    status: 409,
+  });
+  const busy = new ApiError(409, { type: "about:blank", title: "Conflict", status: 409 });
+  expect(isConfirmationRequired(confirm)).toBe(true);
+  expect(isConfirmationRequired(busy)).toBe(false);
+  expect(isConfirmationRequired(new ApiError(404, null))).toBe(false);
+  expect(isConfirmationRequired(new Error("x"))).toBe(false);
 });
 
 test("a problem response becomes an ApiError with its status and problem lines", async () => {

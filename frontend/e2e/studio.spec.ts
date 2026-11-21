@@ -6,7 +6,7 @@ import { API_ORIGIN } from "./ports.ts";
 // real rules: the custom header on every write and the ETag in If-Match.
 const HEADERS = { "x-blog-studio": "1" };
 
-type Seed = { title: string; slug?: string; summary?: string; body?: string };
+type Seed = { title: string; slug?: string; summary?: string; body?: string; publish?: boolean };
 
 const unique = (label: string) => `${label} ${Math.random().toString(36).slice(2, 8)}`;
 
@@ -29,12 +29,21 @@ async function createPost(request: APIRequestContext, seed: Seed): Promise<{ pos
     );
   }
   if (seed.body !== undefined) {
-    await must(
-      await request.put(`${API_ORIGIN}/posts/${id}/body`, {
-        headers: { ...HEADERS, "if-match": created.bodyEtag },
-        data: { body: seed.body },
-      }),
-    );
+    const saved = await (
+      await must(
+        await request.put(`${API_ORIGIN}/posts/${id}/body`, {
+          headers: { ...HEADERS, "if-match": created.bodyEtag },
+          data: { body: seed.body },
+        }),
+      )
+    ).json();
+    if (seed.publish) {
+      await must(
+        await request.post(`${API_ORIGIN}/posts/${id}/publish`, {
+          headers: { ...HEADERS, "if-match": saved.bodyEtag },
+        }),
+      );
+    }
   }
   return { postId: id };
 }
@@ -72,4 +81,34 @@ test("the Preview shows a table with a grid and a boxed code block", async ({ pa
   await expect(page.locator(".preview th").first()).toHaveCSS("background-color", "rgb(238, 238, 238)");
   await expect(page.locator(".preview td").first()).toHaveCSS("border-top-width", "1px");
   await expect(page.locator(".preview pre")).toHaveCSS("overflow-x", "auto");
+});
+
+test("Delete removes a draft after one question and a published post after two", async ({ page, request }) => {
+  const draftTitle = unique("Doomed draft");
+  const liveTitle = unique("Doomed live");
+  const draft = await createPost(request, { title: draftTitle });
+  const live = await createPost(request, {
+    title: liveTitle,
+    slug: `live-${Math.random().toString(36).slice(2, 8)}`,
+    summary: "Sum",
+    body: "Hello.",
+    publish: true,
+  });
+  const questions: string[] = [];
+  page.on("dialog", (dialog) => {
+    questions.push(dialog.message());
+    void dialog.accept();
+  });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: `Delete ${draftTitle}` }).click();
+  await expect(page.getByRole("link", { name: draftTitle })).toHaveCount(0);
+  expect(questions).toHaveLength(1);
+  expect((await request.get(`${API_ORIGIN}/posts/${draft.postId}`)).status()).toBe(404);
+
+  await page.getByRole("button", { name: `Delete ${liveTitle}` }).click();
+  await expect(page.getByRole("link", { name: liveTitle })).toHaveCount(0);
+  expect(questions).toHaveLength(3);
+  expect(questions[2]).toContain("It was published");
+  expect((await request.get(`${API_ORIGIN}/posts/${live.postId}`)).status()).toBe(404);
 });
