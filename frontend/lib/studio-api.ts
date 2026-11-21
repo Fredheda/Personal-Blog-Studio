@@ -59,8 +59,19 @@ export type StudioApi = {
   publish(id: string, ifMatch: string): Promise<Published>;
   unpublish(id: string): Promise<void>;
   checkPost(id: string): Promise<CheckResult>;
-  deletePost(id: string): Promise<void>;
+  deletePost(id: string, options?: { confirm?: "published" }): Promise<void>;
 };
+
+export const CONFIRMATION_REQUIRED_TYPE = "urn:blog-studio:confirmation-required";
+
+/** True for the 409 that asks the caller to confirm deleting a post that was published. */
+export function isConfirmationRequired(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    error.problem?.type === CONFIRMATION_REQUIRED_TYPE
+  );
+}
 
 const BASE = "/api/studio/posts";
 
@@ -109,6 +120,6 @@ export function createStudioApi(fetchImpl: typeof fetch = (...args) => fetch(...
     publish: (id, ifMatch) => call("POST", `/${id}/publish`, { ifMatch }),
     unpublish: (id) => call("POST", `/${id}/unpublish`),
     checkPost: (id) => call("GET", `/${id}/check`),
-    deletePost: (id) => call("DELETE", `/${id}`),
+    deletePost: (id, options) => call("DELETE", `/${id}${options?.confirm ? "?confirm=published" : ""}`),
   };
 }
