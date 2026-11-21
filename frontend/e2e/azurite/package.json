@@ -1,0 +1,8 @@
+{
+  "name": "blog-studio-e2e-azurite",
+  "private": true,
+  "description": "Azurite for the browser tests only. Never shipped; its own lockfile keeps its database drivers out of the app's.",
+  "devDependencies": {
+    "azurite": "3.37.0"
+  }
+}

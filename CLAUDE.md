@@ -53,9 +53,11 @@ Python 3.13 with Poetry 2 (backend); Node 24 with npm 12.2.2 (frontend, Next.js 
 | Frontend install | `cd frontend && npm ci` |
 | Frontend tests | `cd frontend && npm test` |
 | Frontend lint, build, types | `cd frontend && npm run lint && npm run build && npx tsc --noEmit` (the build writes `next-env.d.ts`, which tsc needs) |
+| Browser tests (install Chromium and Azurite once) | `cd frontend && npm run e2e:install` |
+| Browser tests | `cd frontend && npm run e2e` (builds first; `E2E_SKIP_BUILD=1` reuses `.next`; ports 3200, 8200, 8201 and 10000 to 10002 must be free) |
 | All CI checks | `./scripts/ci-local.sh` (the gate before `gh pr ready`) |
 
-CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test` and `frontend-checks` on pull requests only; a push to `main` runs no CI, because the PR already ran it. Images are built on demand by the Deploy workflow, never by CI.
+CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test`, `frontend-checks` and `frontend-e2e` (draft PRs skip it and marking a PR ready runs it; advisory until it is added to the ruleset) on pull requests only; a push to `main` runs no CI, because the PR already ran it. Images are built on demand by the Deploy workflow, never by CI.
 
 ## Gotchas
 
@@ -74,6 +76,7 @@ CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-l
 - `next dev` writes untracked `frontend/AGENTS.md` and `frontend/CLAUDE.md` when it detects an AI agent. Delete them, or start with `env -u AI_AGENT -u CLAUDECODE`.
 - The studio editor is Milkdown Crepe (`frontend/components/CrepeEditor.tsx`, client-only through `next/dynamic`); Markdown stays the source of truth and `frontend/tests/fixtures/crepe-output/` plus `backend/tests/test_editor_fixtures.py` keep what it writes valid for `validate_body` (`lib/normalise.ts` turns an HTML line break into what the validator accepts). Maths is MathML only (`katexOptions.output: "mathml"`): Crepe's `theme/common/style.css` and `latex.css` import KaTeX's stylesheet and with it its fonts, so `CrepeEditor.tsx` imports the theme parts one by one and `app/globals.css` carries the maths popup rules; never import either file. The studio sends `Content-Security-Policy: img-src 'self' data: blob:; media-src 'self'`, and `npm run build` fails on any font file under `.next/static` (`scripts/check-no-fonts.mjs`). Only the body autosaves (`lib/autosave.ts`: one save loop, stops on a 412, after any other failure waits for the next edit or Save; never retry on a timer); details save through the one Save button (`saveAll()` in `PostEditor`); Publish stays disabled while anything is unsaved.
 - `frontend/lib/token.ts` is `server-only` (the managed-identity token never reaches the browser bundle); `tests/hardening.test.ts` fails when a `"use client"` file reaches it, directly or through other modules. Proof method: a client component that imports AND uses it fails `npm run build` (an unused import is dropped before the check).
+- Browser tests (`frontend/e2e/*.spec.ts`, Playwright) run the production build against the real studio API (`backend/e2e_support/studio_app.py`, copied by no Dockerfile) on in-memory Azurite, with only the managed-identity token endpoint faked (`frontend/e2e/msi.ts`). Azurite is its own locked package, `frontend/e2e/azurite/` (exact version, own lockfile, installed with `npm ci --prefix e2e/azurite`, Dependabot-watched; never a bare `npx`). Each test seeds its own post through the API and no test assumes an empty list; each UI ticket adds one browser test per flow it ships. Easy Auth, Entra tokens and cold starts are not covered; 500, 504 and slow answers stay unit tests of the proxy.
 - `GET /healthz` (both apps) is the path Easy Auth and token validation exclude; keep it free of data.
 
 ## Security checks

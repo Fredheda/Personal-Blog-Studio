@@ -3,8 +3,10 @@
 # `gh pr ready`. A test in backend/tests keeps this file and ci.yml in step:
 # every ci.yml job id appears below as a `step "<job-id>"`.
 #
-# Needs `poetry install` once in backend/ and `npm ci` once in frontend/. workflow-lint uses a local
-# `actionlint` if present, else Docker.
+# Needs `poetry install` once in backend/ and `npm ci` once in frontend/, plus
+# `cd frontend && npm run e2e:install` once (Chromium and the browser tests'
+# Azurite; a running local Azurite must be stopped: the tests use ports 10000
+# to 10002). workflow-lint uses a local `actionlint` if present, else Docker.
 #
 # Usage: ./scripts/ci-local.sh
 set -euo pipefail
@@ -33,6 +35,9 @@ step "frontend-test"
 
 step "frontend-checks"
 (cd frontend && npm run lint && npm run build && npx tsc --noEmit)
+
+step "frontend-e2e"
+(cd frontend && npm run e2e)
 
 echo
 echo "ci-local: all checks passed."

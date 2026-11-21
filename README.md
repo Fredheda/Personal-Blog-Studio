@@ -10,7 +10,7 @@ Status: the backend has the content model, blob storage layer, studio post servi
 
 ## Repo setup
 
-- CI: `.github/workflows/ci.yml` (`workflow-lint`, `backend-test`, `backend-lint`, `frontend-test`, `frontend-checks`) on pull requests; run `./scripts/ci-local.sh` before opening for review.
+- CI: `.github/workflows/ci.yml` (`workflow-lint`, `backend-test`, `backend-lint`, `frontend-test`, `frontend-checks`, `frontend-e2e` browser tests) on pull requests; run `./scripts/ci-local.sh` before opening for review.
 - Security: `.github/workflows/security.yml` (secret scan, Python scan, dependency audits, CodeQL) and `.github/dependabot.yml`; see `CLAUDE.md`.
 - AI PR review: `.github/workflows/claude-review.yml`, secret `CLAUDE_CODE_OAUTH_TOKEN`.
 - `main` accepts changes through pull requests only.

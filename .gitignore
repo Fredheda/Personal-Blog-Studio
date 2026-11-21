@@ -26,6 +26,8 @@ venv/
 # Node / Next.js / Vite
 node_modules/
 .next/
+playwright-report/
+test-results/
 out/
 build/
 dist/

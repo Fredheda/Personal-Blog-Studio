@@ -21,7 +21,10 @@ updates:
         update-types: [minor, patch]
 
   - package-ecosystem: npm
-    directory: /frontend
+    # The second directory is the browser tests' own locked Azurite package.
+    directories:
+      - /frontend
+      - /frontend/e2e/azurite
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
