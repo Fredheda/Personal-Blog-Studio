@@ -86,18 +86,6 @@
   .posts li { margin: 0.5rem 0; }
   .muted, .status { color: var(--color-muted); }
   .status { font-size: 0.9rem; }
-  .problem, .ok {
-    border: 1px solid var(--color-err);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--color-err) 12%, var(--color-pane));
-    padding: 0.5rem 0.75rem;
-    margin: 0.75rem 0;
-  }
-  .ok {
-    border-color: var(--color-ok);
-    background: color-mix(in srgb, var(--color-ok) 12%, var(--color-pane));
-  }
-  .problem ul { list-style: disc; padding-left: 1.4em; }
   .crepe-host {
     border: 1px solid var(--color-line);
     border-radius: 12px;

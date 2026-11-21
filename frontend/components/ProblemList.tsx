@@ -1,4 +1,5 @@
 import type { ApiError } from "../lib/problem";
+import { MessageStrip } from "./MessageStrip";
 
 export const SESSION_MESSAGE =
   "Could not reach the studio. Your session may have expired: reload the page to sign in again.";
@@ -16,7 +17,7 @@ function hint(status: number): string | null {
 export function ProblemList({ error }: { error: ApiError | null }) {
   if (!error) return null;
   if (error.status === 0) {
-    return <p role="alert" className="problem">{SESSION_MESSAGE}</p>;
+    return <MessageStrip kind="error">{SESSION_MESSAGE}</MessageStrip>;
   }
   const noBody = error.problem === null;
   const problem = error.problem ?? {
@@ -27,19 +28,19 @@ export function ProblemList({ error }: { error: ApiError | null }) {
   const extra = noBody ? hint(error.status) : null;
   const lines = problem.problems ?? [];
   return (
-    <div role="alert" className="problem">
+    <MessageStrip kind="error">
       <strong>{problem.title}</strong>
       {/* The API's reason (for example "origin not allowed"). A refused body
           lists its problems below instead, where the detail would only repeat them. */}
       {lines.length === 0 && problem.detail && <> {problem.detail}</>}
       {extra && <> {extra}</>}
       {lines.length > 0 && (
-        <ul>
+        <ul className="mt-1 list-disc pl-[1.4em]">
           {lines.map((p, i) => (
             <li key={i}>{p.line > 0 ? `Line ${p.line}: ` : ""}{p.message}</li>
           ))}
         </ul>
       )}
-    </div>
+    </MessageStrip>
   );
 }

@@ -72,7 +72,7 @@ test("lists the posts with a link to each editor", async () => {
   expect(screen.getByRole("link", { name: "(untitled)" })).toBeTruthy();
 });
 
-test("each row says whether the post is live; a post published and then unpublished is a draft", async () => {
+test("each row says whether the post is live as a pill; a post published and then unpublished is a draft", async () => {
   const base = { updatedAt: "2026-11-10T10:00:00Z", versionPublishedAt: null };
   const api = fakeApi({
     listPosts: async () => [
@@ -81,7 +81,8 @@ test("each row says whether the post is live; a post published and then unpublis
     ],
   });
   render(<Posts api={api} />);
-  expect(await screen.findByText(/Published, version 1/)).toBeTruthy();
+  const live = await screen.findByText(/Published, version 1/);
+  expect(live.className).toContain("rounded-full");
   expect(screen.getByText(/Draft/)).toBeTruthy();
 });
 
@@ -126,91 +127,111 @@ const row = {
   publishedAt: null,
   versionPublishedAt: null,
 };
+const live = { ...row, published: true, version: 1, publishedAt: "2026-11-10T09:00:00Z" };
 const confirmation = new ApiError(409, {
   type: "urn:blog-studio:confirmation-required",
   title: "Confirmation required",
   status: 409,
 });
 
-function ask(...answers: boolean[]) {
-  const spy = vi.spyOn(window, "confirm");
-  for (const answer of answers) spy.mockReturnValueOnce(answer);
-  return spy;
+async function press(name: string) {
+  fireEvent.click(await screen.findByRole("button", { name }));
 }
 
-test("Delete asks once, deletes a draft and removes its row", async () => {
+test("Delete asks in a dialog, deletes a draft and removes its row", async () => {
   const deletePost = vi.fn(async () => undefined);
-  const confirm = ask(true);
   render(<Posts api={fakeApi({ listPosts: async () => [row], deletePost })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First" }));
+  await press("Delete First");
+  const dialog = await screen.findByRole("dialog", { name: "Delete this draft?" });
+  expect(dialog.textContent).toContain('"First" and its revisions are removed. You can get it back for 7 days by asking.');
+  fireEvent.click(screen.getByRole("button", { name: "Delete draft" }));
   await waitFor(() => expect(screen.queryByRole("link", { name: "First" })).toBeNull());
-  expect(confirm).toHaveBeenCalledTimes(1);
-  expect(confirm).toHaveBeenCalledWith('Delete "First"? You can get it back for 7 days by asking.');
   expect(deletePost).toHaveBeenCalledTimes(1);
   expect(deletePost).toHaveBeenCalledWith(ID);
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-test("cancelling the first confirmation sends nothing and keeps the row", async () => {
+test("Keep it closes the dialog and sends nothing; Escape does the same", async () => {
   const deletePost = vi.fn(async () => undefined);
-  ask(false);
   render(<Posts api={fakeApi({ listPosts: async () => [row], deletePost })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First" }));
+  await press("Delete First");
+  await screen.findByRole("dialog");
+  fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  await press("Delete First");
+  fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(deletePost).not.toHaveBeenCalled();
   expect(screen.getByRole("link", { name: "First" })).toBeTruthy();
 });
 
-test("a post published once asks the stronger question, then deletes with confirm", async () => {
+test("a post that is published now asks once, in the post dialog, and deletes with confirm", async () => {
+  const deletePost = vi.fn(async () => undefined);
+  render(<Posts api={fakeApi({ listPosts: async () => [live], deletePost })} />);
+  await press("Delete First");
+  const dialog = await screen.findByRole("dialog", { name: "Delete this post?" });
+  expect(dialog.textContent).toContain(
+    '"First" is taken off the blog and removed, with its published versions. You can get it back for 7 days by asking.',
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Delete post" }));
+  await waitFor(() => expect(screen.queryByRole("link", { name: "First" })).toBeNull());
+  expect(deletePost).toHaveBeenCalledTimes(1);
+  expect(deletePost).toHaveBeenCalledWith(ID, { confirm: "published" });
+});
+
+test("a post published earlier asks the draft question, then the post question the API asks for", async () => {
   const deletePost = vi
     .fn<StudioApi["deletePost"]>()
     .mockRejectedValueOnce(confirmation)
     .mockResolvedValueOnce(undefined);
-  const confirm = ask(true, true);
   render(<Posts api={fakeApi({ listPosts: async () => [row], deletePost })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First" }));
+  await press("Delete First");
+  fireEvent.click(await screen.findByRole("button", { name: "Delete draft" }));
+  await screen.findByRole("dialog", { name: "Delete this post?" });
+  expect(deletePost).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Delete post" }));
   await waitFor(() => expect(screen.queryByRole("link", { name: "First" })).toBeNull());
-  expect(confirm).toHaveBeenNthCalledWith(
-    2,
-    "It was published: deleting takes it off the public site and removes it. You can get it back for 7 days by asking.",
-  );
   expect(deletePost).toHaveBeenNthCalledWith(1, ID);
   expect(deletePost).toHaveBeenNthCalledWith(2, ID, { confirm: "published" });
 });
 
-test("cancelling the stronger question keeps the post and sends no second delete", async () => {
+test("keeping the post at the second question sends no second delete", async () => {
   const deletePost = vi.fn<StudioApi["deletePost"]>().mockRejectedValueOnce(confirmation);
-  const confirm = ask(true, false);
   render(<Posts api={fakeApi({ listPosts: async () => [row], deletePost })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First" }));
-  await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+  await press("Delete First");
+  fireEvent.click(await screen.findByRole("button", { name: "Delete draft" }));
+  await screen.findByRole("dialog", { name: "Delete this post?" });
+  fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(deletePost).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("link", { name: "First" })).toBeTruthy();
 });
 
-test("another 409 shows an error and never opens the stronger question", async () => {
+test("another 409 shows an error and never opens the post dialog", async () => {
   const busy = new ApiError(409, { type: "about:blank", title: "Conflict", status: 409 });
   const deletePost = vi.fn<StudioApi["deletePost"]>().mockRejectedValue(busy);
-  const confirm = ask(true);
   render(<Posts api={fakeApi({ listPosts: async () => [row], deletePost })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First" }));
+  await press("Delete First");
+  fireEvent.click(await screen.findByRole("button", { name: "Delete draft" }));
   expect(await screen.findByRole("alert")).toBeTruthy();
-  expect(confirm).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.getByRole("link", { name: "First" })).toBeTruthy();
 });
 
 test("a 404 means it is already gone: the row leaves and no error shows", async () => {
   const deletePost = vi.fn<StudioApi["deletePost"]>().mockRejectedValue(new ApiError(404, null));
-  ask(true);
   render(<Posts api={fakeApi({ listPosts: async () => [row], deletePost })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First" }));
+  await press("Delete First");
+  fireEvent.click(await screen.findByRole("button", { name: "Delete draft" }));
   await waitFor(() => expect(screen.queryByRole("link", { name: "First" })).toBeNull());
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
 test("a delete that gets no answer says the session may have expired and keeps the row", async () => {
   const deletePost = vi.fn<StudioApi["deletePost"]>().mockRejectedValue(new ApiError(0, null));
-  ask(true);
   render(<Posts api={fakeApi({ listPosts: async () => [row], deletePost })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Delete First" }));
+  await press("Delete First");
+  fireEvent.click(await screen.findByRole("button", { name: "Delete draft" }));
   expect((await screen.findByRole("alert")).textContent).toMatch(/session may have expired/i);
   expect(screen.getByRole("link", { name: "First" })).toBeTruthy();
 });

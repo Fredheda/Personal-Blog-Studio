@@ -134,32 +134,61 @@ test("the editor is dark, shares the Preview's type and colours code with the to
   await expect(block.locator(".cm-content span", { hasText: "def" }).first()).toHaveCSS("color", "rgb(185, 168, 255)");
 });
 
-test("Delete removes a draft after one question and a published post after two", async ({ page, request }) => {
+test("publishing shows a green status strip", async ({ page, request }) => {
+  const slug = `strip-${Math.random().toString(36).slice(2, 8)}`;
+  const { postId } = await createPost(request, { title: unique("Strip"), slug, summary: "Sum", body: "Hello." });
+  await page.goto(`/posts/${postId}`);
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const strip = page.locator('[role="status"]', { hasText: "Published as version 1" });
+  await expect(strip).toBeVisible();
+  await expect(strip).toHaveCSS("border-top-color", "rgb(95, 227, 161)");
+  await expect(strip).toHaveCSS("border-top-left-radius", "12px");
+});
+
+test("Delete asks in a dialog: once for a draft or a post that is live, twice for a post published earlier", async ({ page, request }) => {
   const draftTitle = unique("Doomed draft");
   const liveTitle = unique("Doomed live");
+  const onceTitle = unique("Doomed once");
+  const slug = () => `del-${Math.random().toString(36).slice(2, 8)}`;
   const draft = await createPost(request, { title: draftTitle });
-  const live = await createPost(request, {
-    title: liveTitle,
-    slug: `live-${Math.random().toString(36).slice(2, 8)}`,
-    summary: "Sum",
-    body: "Hello.",
-    publish: true,
-  });
-  const questions: string[] = [];
-  page.on("dialog", (dialog) => {
-    questions.push(dialog.message());
-    void dialog.accept();
-  });
+  const live = await createPost(request, { title: liveTitle, slug: slug(), summary: "Sum", body: "Hello.", publish: true });
+  const once = await createPost(request, { title: onceTitle, slug: slug(), summary: "Sum", body: "Hello.", publish: true });
+  await must(await request.post(`${API_ORIGIN}/posts/${once.postId}/unpublish`, { headers: HEADERS }));
   await page.goto("/");
 
   await page.getByRole("button", { name: `Delete ${draftTitle}` }).click();
+  await expect(page.getByRole("dialog", { name: "Delete this draft?" })).toBeVisible();
+  const backdrop = page.getByRole("dialog").locator("xpath=..");
+  await expect(backdrop).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: draftTitle })).toHaveCount(1);
+  await page.getByRole("button", { name: `Delete ${draftTitle}` }).click();
+  await page.getByRole("button", { name: "Delete draft" }).click();
   await expect(page.getByRole("link", { name: draftTitle })).toHaveCount(0);
-  expect(questions).toHaveLength(1);
   expect((await request.get(`${API_ORIGIN}/posts/${draft.postId}`)).status()).toBe(404);
 
   await page.getByRole("button", { name: `Delete ${liveTitle}` }).click();
+  await expect(page.getByRole("dialog", { name: "Delete this post?" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete post" }).click();
   await expect(page.getByRole("link", { name: liveTitle })).toHaveCount(0);
-  expect(questions).toHaveLength(3);
-  expect(questions[2]).toContain("It was published");
   expect((await request.get(`${API_ORIGIN}/posts/${live.postId}`)).status()).toBe(404);
+
+  await page.getByRole("button", { name: `Delete ${onceTitle}` }).click();
+  await page.getByRole("button", { name: "Delete draft" }).click();
+  await expect(page.getByRole("dialog", { name: "Delete this post?" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete post" }).click();
+  await expect(page.getByRole("link", { name: onceTitle })).toHaveCount(0);
+  expect((await request.get(`${API_ORIGIN}/posts/${once.postId}`)).status()).toBe(404);
+});
+
+test("the list shows draft and published pills and the white primary button", async ({ page, request }) => {
+  const title = unique("Pills");
+  await createPost(request, { title, slug: `pill-${Math.random().toString(36).slice(2, 8)}`, summary: "Sum", body: "Hello.", publish: true });
+  await page.goto("/");
+  const row = page.locator("li", { hasText: title });
+  await expect(row.getByText("Published, version 1")).toBeVisible();
+  await expect(row.locator(".bg-ok")).toHaveCSS("background-color", "rgb(95, 227, 161)");
+  await page.getByLabel("Title").fill("x");
+  await expect(page.getByRole("button", { name: "Create post" })).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });

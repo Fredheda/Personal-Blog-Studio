@@ -8,6 +8,8 @@ import { createAutosave, type AutosaveStatus } from "../lib/autosave";
 import { publishedNotice, unpublishedNotice } from "../lib/live-status";
 import { ApiError } from "../lib/problem";
 import { createStudioApi, type Draft, type StudioApi } from "../lib/studio-api";
+import { Button } from "./Button";
+import { MessageStrip } from "./MessageStrip";
 import { Preview } from "./Preview";
 import { ProblemList } from "./ProblemList";
 
@@ -16,7 +18,7 @@ const CrepeEditor = dynamic(() => import("./CrepeEditor").then((m) => m.CrepeEdi
   loading: () => <p>Loading the editor…</p>,
 });
 
-const STALE = "This post changed elsewhere. Reload it to continue; your unsaved text stays in the box until then.";
+const STALE = "This post changed elsewhere. Reload it to continue; your unsaved text stays on the page until then.";
 const STATUS_TEXT: Record<AutosaveStatus, string> = {
   idle: "",
   pending: "Unsaved changes",
@@ -227,8 +229,8 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       <input id="tags" value={tags} onChange={(e) => setTags(e.target.value)} />
 
       <div className="tabs" role="group" aria-label="View">
-        <button type="button" aria-pressed={view === "edit"} onClick={() => setView("edit")}>Edit</button>
-        <button type="button" aria-pressed={view === "preview"} onClick={() => setView("preview")}>Preview</button>
+        <Button aria-pressed={view === "edit"} onClick={() => setView("edit")}>Edit</Button>
+        <Button aria-pressed={view === "preview"} onClick={() => setView("preview")}>Preview</Button>
       </div>
       <div hidden={view !== "edit"}>
         <CrepeEditor
@@ -248,17 +250,16 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       )}
       <p className="status" role="status">{STATUS_TEXT[status]}</p>
 
-      <button
-        type="button"
+      <Button
         disabled={busy || conflict || (!metaDirty && !bodyUnsaved)}
         onClick={() => void saveAll()}
       >
         Save
-      </button>
+      </Button>
 
       <hr />
-      <button
-        type="button"
+      <Button
+        variant="primary"
         disabled={busy || conflict || metaDirty || bodyUnsaved}
         title={metaDirty || bodyUnsaved ? "Save your edits first" : undefined}
         onClick={() =>
@@ -269,9 +270,8 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         }
       >
         Publish
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
         onClick={() =>
           run(async () => {
             await client.unpublish(id);
@@ -280,28 +280,33 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         }
       >
         Unpublish
-      </button>
+      </Button>
 
       {conflict && (
-        <div role="alert" className="problem">
-          {STALE}{" "}
-          <button
-            type="button"
-            onClick={() => {
-              setError(null);
-              setBodyError(null);
-              setStatus("idle");
-              setSaved(null); // the editor remounts with the reloaded text
-              setReloadKey((k) => k + 1);
-            }}
-          >
-            Reload the post
-          </button>
-        </div>
+        <MessageStrip
+          kind="conflict"
+          action={
+            <Button
+              variant="primary"
+              className="m-0"
+              onClick={() => {
+                setError(null);
+                setBodyError(null);
+                setStatus("idle");
+                setSaved(null); // the editor remounts with the reloaded text
+                setReloadKey((k) => k + 1);
+              }}
+            >
+              Reload the post
+            </Button>
+          }
+        >
+          {STALE}
+        </MessageStrip>
       )}
       <ProblemList error={shownBodyError} />
       <ProblemList error={shownError} />
-      {notice && <p className="ok" role="status">{notice}</p>}
+      {notice && <MessageStrip kind="success">{notice}</MessageStrip>}
     </section>
   );
 }
