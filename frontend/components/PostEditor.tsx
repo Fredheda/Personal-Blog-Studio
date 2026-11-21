@@ -215,7 +215,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
 
   return (
     <section>
-      <p><Link href="/">← All posts</Link></p>
       <h1>{saved.title || "(untitled)"}</h1>
 
       <label htmlFor="title">Title</label>

@@ -81,6 +81,16 @@ test("the studio is dark and its page elements are restyled", async ({ page, req
   await expect(page.getByRole("link", { name: title, exact: true })).toHaveCSS("text-decoration-line", "underline");
 });
 
+test("the top bar leads back to the list and marks the current page", async ({ page, request }) => {
+  const { postId } = await createPost(request, { title: unique("Bar") });
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "All posts", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.goto(`/posts/${postId}`);
+  await expect(page.getByRole("link", { name: "All posts", exact: true })).not.toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: "Studio", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("the Preview shows a table with a grid and a boxed code block", async ({ page, request }) => {
   const body = "| a | b |\n| - | - |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n";
   const { postId } = await createPost(request, { title: unique("Table"), body });
