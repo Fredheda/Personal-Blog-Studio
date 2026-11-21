@@ -14,7 +14,7 @@ import "@milkdown/crepe/theme/common/list-item.css";
 import "@milkdown/crepe/theme/common/placeholder.css";
 import "@milkdown/crepe/theme/common/toolbar.css";
 import "@milkdown/crepe/theme/common/table.css";
-import "@milkdown/crepe/theme/classic.css";
+import "@milkdown/crepe/theme/classic-dark.css";
 
 import { Crepe } from "@milkdown/crepe";
 import { useEffect, useRef } from "react";

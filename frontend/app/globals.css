@@ -131,6 +131,48 @@
   max-width: 294px;
   font-family: var(--crepe-font-code);
 }
+/* Crepe's dark theme with our tokens (spec 7.4). The selector is more specific
+   than the theme's own `.milkdown`, so the order of the stylesheets does not
+   matter. Change from 7.4, stated in the PR (owner "497 yes", the specialist
+   edits the spec row): `outline` is `muted`, not #3a4050, which gives list
+   bullets and numbers a contrast of 1.8. No coloured accent: primary and
+   inverse are the text colour. */
+.crepe-host .milkdown {
+  --crepe-color-background: var(--color-bg);
+  --crepe-color-on-background: var(--color-ink);
+  --crepe-color-surface: var(--color-pane);
+  --crepe-color-surface-low: var(--color-deep);
+  --crepe-color-on-surface: var(--color-text);
+  --crepe-color-on-surface-variant: var(--color-muted);
+  --crepe-color-outline: var(--color-muted);
+  --crepe-color-primary: var(--color-text);
+  --crepe-color-secondary: var(--color-raise);
+  --crepe-color-on-secondary: var(--color-text);
+  --crepe-color-inverse: var(--color-text);
+  --crepe-color-on-inverse: var(--color-bg);
+  --crepe-color-inline-code: var(--color-code-ink);
+  --crepe-color-error: var(--color-err);
+  --crepe-color-hover: var(--color-raise);
+  --crepe-color-selected: #2f3542;
+  --crepe-color-inline-area: var(--color-raise);
+  --crepe-base-font-size: 16.5px;
+  --crepe-font-title: var(--ui-font);
+  --crepe-font-default: var(--ui-font);
+  --crepe-font-code: var(--ui-mono);
+  /* Floating menus and toolbars: an edge and a dark shadow, so they stand off the page. */
+  --crepe-shadow-1: 0 0 0 1px var(--color-line), 0 6px 18px rgba(0, 0, 0, 0.5);
+  --crepe-shadow-2: 0 0 0 1px var(--color-line), 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* Code blocks sit on `deep`. Crepe sets the surface colour on the block, its
+   `.cm-editor` and its `.cm-gutters` with three classes, which beats any
+   CodeMirror theme rule, so the background is set on the same three elements. */
+.crepe-host .milkdown .milkdown-code-block,
+.crepe-host .milkdown .milkdown-code-block .cm-editor,
+.crepe-host .milkdown .milkdown-code-block .cm-gutters {
+  background: var(--color-deep);
+}
+
 /* Type, written once for the Preview and the editor (spec 7.1 and 7.4).
    Unlayered, and more specific than Crepe's own rules, which are unlayered
    too, so the editor matches the Preview. Margins and list styles are left to

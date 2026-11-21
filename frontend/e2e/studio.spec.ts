@@ -119,6 +119,21 @@ test("the Preview colours Python code with the token colours, also for a capital
   await expect(page.locator(".post-body .hljs-built_in")).toHaveCSS("color", "rgb(127, 224, 255)");
 });
 
+test("the editor is dark, shares the Preview's type and colours code with the token colours", async ({ page, request }) => {
+  const body = "## Heading\n\n#### Small\n\n- one\n- two\n\n```Python\ndef f():\n    return 1\n```\n";
+  const { postId } = await createPost(request, { title: unique("Editor"), body });
+  await page.goto(`/posts/${postId}`);
+  await expect(page.locator(".crepe-host .milkdown")).toHaveCSS("background-color", "rgb(16, 18, 23)");
+  await expect(page.locator(".milkdown .ProseMirror h2")).toHaveCSS("font-size", "21.78px");
+  await expect(page.locator(".milkdown .ProseMirror h4")).toHaveCSS("font-size", "16.5px");
+  await expect(page.locator(".milkdown .label-wrapper").first()).toBeVisible();
+  await expect(page.locator(".milkdown .label-wrapper").first()).toHaveCSS("color", "rgb(152, 161, 179)");
+  const block = page.locator(".milkdown .milkdown-code-block").first();
+  await block.scrollIntoViewIfNeeded();
+  await expect(block.locator(".cm-editor")).toHaveCSS("background-color", "rgb(11, 13, 17)");
+  await expect(block.locator(".cm-content span", { hasText: "def" }).first()).toHaveCSS("color", "rgb(185, 168, 255)");
+});
+
 test("Delete removes a draft after one question and a published post after two", async ({ page, request }) => {
   const draftTitle = unique("Doomed draft");
   const liveTitle = unique("Doomed live");
