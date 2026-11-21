@@ -24,7 +24,7 @@ const RETURNED = ["content-type", "etag"];
 
 export type ProxyDeps = {
   upstream: string;
-  getToken: () => Promise<string>;
+  getToken: () => Promise<string | null>;
   fetchImpl?: typeof fetch;
 };
 
@@ -90,7 +90,8 @@ export async function proxy(
       const value = request.headers.get(name);
       if (value !== null) headers.set(name, value);
     }
-    headers.set("authorization", `Bearer ${await deps.getToken()}`);
+    const token = await deps.getToken();
+    if (token !== null) headers.set("authorization", `Bearer ${token}`);
     const upstream = await (deps.fetchImpl ?? fetch)(
       `${deps.upstream.replace(/\/$/, "")}/${segments.join("/")}${upstreamQuery(request, segments)}`,
       {

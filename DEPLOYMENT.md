@@ -74,6 +74,23 @@ kill "$AZURITE_PID"
 
 CI runs Azurite only for the browser tests; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change. A coding agent starts it as a harness background task and stops it as a task, never with `&` and a saved PID (workspace rule for local runs).
 
+## Complete local run (dev containers)
+
+A complete local run uses the real Azure storage with the production code, but on two DEV containers (`blog-drafts-dev`, `blog-published-dev`) of the shared account, never the real posts. Nothing is mocked: only the container names differ, and the web app sends no token (no sign-in locally; `STUDIO_API_AUDIENCE` is unset). It needs the owner's yes to the one-time Azure change below.
+
+1. One time, the owner's yes (creates the containers and gives the signed-in user Storage Blob Data Contributor on those two containers only; it fails when the user holds any other blob data role, which keeps a wrong setting away from production): `./scripts/setup-dev-storage.sh` (dry run), then `./scripts/setup-dev-storage.sh --apply`. Needs `az login` and `jq`. The output contains the subscription id and the user's object id: do not paste it into chat or tickets.
+2. `cp .env.local.example .env.local && cp frontend/.env.local.example frontend/.env.local` (git-ignored; names and loopback URLs only).
+3. Start three servers from a shell without `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_CLIENT_SECRET` set (so the login used is the checked `az login`, not an environment credential), each as its own harness background task (never `&` with a saved PID), then check each with `lsof -nP -iTCP:<port> -sTCP:LISTEN` (it must show `127.0.0.1`, not `*`):
+   - from `backend/`: `poetry run uvicorn studio_api.app:app --host 127.0.0.1 --port 8300 --env-file ../.env.local`
+   - from `backend/`: `poetry run uvicorn blog_api.app:app --host 127.0.0.1 --port 8301 --env-file ../.env.local`
+   - from `frontend/`: `env -u AI_AGENT -u CLAUDECODE npm run dev -- --port 3300`
+4. Seed once: `cd backend && set -a && . ../.env.local && set +a && poetry run python -m dev_support.seed` (creates a draft, a published post and one published then unpublished; refuses unless the API and the dev container agree).
+5. Open `http://127.0.0.1:3300` (`localhost` is refused by the origin guard).
+6. Read API: it trusts the principal header the platform injects, so a local call sets it itself: `curl -H "X-MS-CLIENT-PRINCIPAL: $(printf '{"claims":[{"typ":"roles","val":"Blog.Read"}]}' | base64)" http://127.0.0.1:8301/v1/posts`. Media links (user-delegation SAS) need a role at account scope that the local user does not have; they are not part of a local run.
+7. Stop each server as a task. The dev containers keep the test posts; the account's 7-day soft delete applies to them too.
+
+The local APIs have no sign-in and bind loopback only. Reads are not origin-checked (DNS rebinding from a hostile page could read the dev test posts); writes need the `X-Blog-Studio` header and an allowed origin. Accepted: test data only. The role check goes by role name, so a custom role with blob data rights under another name is not caught.
+
 ## Gotchas
 
 - **Bicep `ingress` is authoritative.** The custom domain is declared in `main.bicep` from `BLOG_WEB_CUSTOM_DOMAIN` and `BLOG_WEB_CERTIFICATE_NAME` (written by `bind-domain.sh`). A deploy without them while a domain is bound would unbind it, so `deploy.sh` refuses it. The CNAME must point directly at the app's generated hostname (never a proxy), and a CAA record on the zone, if one is ever added, must allow `digicert.com`; otherwise the managed certificate is not issued or renewed.
