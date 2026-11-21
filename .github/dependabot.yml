@@ -50,8 +50,8 @@ updates:
         update-types: [minor, patch]
 
   # The runtimes are pinned on purpose: Node 24 (npm 12 needs it) and Python
-  # 3.13 (backend/.python-version, pyproject.toml). The images use floating
-  # minor tags, so patch releases arrive at build time, not through Dependabot.
+  # 3.13 (backend/.python-version, pyproject.toml). The images are pinned by
+  # digest, so patch releases arrive as Dependabot digest updates.
   - package-ecosystem: docker
     directories:
       - /backend

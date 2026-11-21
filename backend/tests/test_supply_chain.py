@@ -6,7 +6,9 @@
    the backend images, and Poetry's own dependencies taken inside the same
    14-day window in the images;
 3. every GitHub Action pinned by commit, with its release as a comment;
-4. no npx download.
+4. no npx download;
+5. every Docker image a Dockerfile builds from or a workflow or script runs is
+   pinned by digest, with its tag kept beside it.
 
 To bump Poetry or pip: change the pin in .github/workflows/ci.yml,
 .github/workflows/security.yml and both backend Dockerfiles together.
@@ -27,6 +29,9 @@ INSTALL = re.compile(r"\b(?:pip|pipx) (install|inject)\b(.*)")
 ACTION = re.compile(r"uses:\s+\S+@[0-9a-f]{40}\s+#\s+v[0-9]")
 POETRY_PIN = re.compile(r"poetry==([0-9][0-9.]*)")
 NPX_DOWNLOAD = re.compile(r"\bnpx\s+(?:-y\b|--yes\b|[^\s@-]\S*@\S)")
+PINNED_IMAGE = re.compile(r"[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}")
+FROM = re.compile(r"FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?", re.I)
+DOCKER_RUN_VALUE_OPTIONS = {"-v", "--volume", "-w", "--workdir", "-e", "--env"}
 
 
 def tracked(*patterns: str) -> list[Path]:
@@ -177,3 +182,43 @@ def test_the_scan_covers_the_known_install_files() -> None:
         "backend/Dockerfile.studio",
         "frontend/Dockerfile",
     } <= names
+
+
+def docker_images() -> Iterator[tuple[str, str]]:
+    for path in tracked("**/Dockerfile*"):
+        stages: set[str] = set()
+        for number, line in lines(path):
+            match = FROM.match(line)
+            if match:
+                image, stage = match.groups()
+                if image not in stages:
+                    yield f"{rel(path)}:{number}", image
+                if stage:
+                    stages.add(stage)
+    for path in [*workflows(), *tracked("scripts/*.sh")]:
+        for line in path.read_text().replace("\\\n", " ").splitlines():
+            match = re.search(r"\bdocker run\b(.*)", line)
+            if not match or line.lstrip().startswith("#"):
+                continue
+            takes_value = False
+            for arg in match.group(1).split():
+                if takes_value:
+                    takes_value = False
+                elif arg.startswith("-"):
+                    takes_value = arg in DOCKER_RUN_VALUE_OPTIONS
+                else:
+                    yield rel(path), arg
+                    break
+
+
+def test_every_docker_image_is_pinned_by_digest() -> None:
+    images = list(docker_images())
+    assert len(images) >= 10, f"too few images found; the scan is stale: {images}"
+    offenders = [
+        f"{at}: {ref}" for at, ref in images if not PINNED_IMAGE.fullmatch(ref)
+    ]
+    assert offenders == []
+    digests: dict[str, set[str]] = {}
+    for _, ref in images:
+        digests.setdefault(ref.split(":", 1)[0], set()).add(ref)
+    assert {name: refs for name, refs in digests.items() if len(refs) > 1} == {}
