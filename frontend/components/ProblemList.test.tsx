@@ -29,6 +29,20 @@ test("an error with a problem body is unchanged: title and detail, no hint", () 
   expect(screen.getByRole("alert").textContent).toBe("Forbidden origin not allowed");
 });
 
+test("the alert is a strip with the problem lines as a bulleted list", () => {
+  const problem = {
+    type: "about:blank",
+    title: "Unprocessable Content",
+    status: 422,
+    problems: [{ line: 3, message: "raw HTML is not allowed" }],
+  };
+  render(<ProblemList error={new ApiError(422, problem)} />);
+  const alert = screen.getByRole("alert");
+  expect(alert.textContent).toBe("Unprocessable ContentLine 3: raw HTML is not allowed");
+  expect(alert.querySelector("ul.list-disc li")?.textContent).toBe("Line 3: raw HTML is not allowed");
+  expect(alert.className).toContain("border-err");
+});
+
 test("the waking-up 504 problem shows its reason", () => {
   const problem = {
     type: "about:blank",

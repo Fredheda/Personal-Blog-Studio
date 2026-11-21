@@ -134,6 +134,17 @@ test("the editor is dark, shares the Preview's type and colours code with the to
   await expect(block.locator(".cm-content span", { hasText: "def" }).first()).toHaveCSS("color", "rgb(185, 168, 255)");
 });
 
+test("publishing shows a green status strip", async ({ page, request }) => {
+  const slug = `strip-${Math.random().toString(36).slice(2, 8)}`;
+  const { postId } = await createPost(request, { title: unique("Strip"), slug, summary: "Sum", body: "Hello." });
+  await page.goto(`/posts/${postId}`);
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const strip = page.locator('[role="status"]', { hasText: "Published as version 1" });
+  await expect(strip).toBeVisible();
+  await expect(strip).toHaveCSS("border-top-color", "rgb(95, 227, 161)");
+  await expect(strip).toHaveCSS("border-top-left-radius", "12px");
+});
+
 test("Delete removes a draft after one question and a published post after two", async ({ page, request }) => {
   const draftTitle = unique("Doomed draft");
   const liveTitle = unique("Doomed live");
