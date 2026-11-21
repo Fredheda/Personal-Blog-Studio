@@ -6,15 +6,15 @@ import pytest
 
 from blog_core import layout
 from blog_core.models import DraftMeta, MediaMeta
-from blog_core.store import Blob
+from blog_core.store import Blob, StoreError
 from studio_api.errors import (
     Conflict,
+    ConfirmationRequired,
     MissingMedia,
     PostNotFound,
     SlugLocked,
     SlugTaken,
     StaleEtag,
-    StillPublished,
     ValidationFailed,
 )
 from studio_api.markdown import MAX_BODY_BYTES, Problem
@@ -305,17 +305,151 @@ def test_unpublish_removes_index_and_slug_but_keeps_versions(
     svc.unpublish(pid)  # idempotent
 
 
-def test_delete_refuses_while_published_then_removes_the_draft_folder(
+def publish(svc: PostService, pid: str):
+    return svc.publish(pid, if_match=svc.get(pid).body_etag)
+
+
+def test_a_new_draft_deletes_without_touching_the_published_container(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    pid = svc.create("Hi").post_id  # no slug
+    svc.delete(pid)
+    assert store.list(layout.DRAFTS, "posts/") == []
+    assert svc.list_drafts() == []
+    assert [c for c, _ in store.writes if c == layout.PUBLISHED] == []
+    assert store.read(layout.PUBLISHED, layout.INDEX) is None
+
+
+def test_deleting_a_draft_never_rewrites_the_index(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    other = ready(svc, slug="other")
+    publish(svc, other)
+    before = store.read(layout.PUBLISHED, layout.INDEX)
+    pid = ready(svc, slug="mine")
+    svc.delete(pid)
+    assert store.read(layout.PUBLISHED, layout.INDEX) == before
+
+
+def test_delete_of_a_published_post_needs_confirmation_then_takes_everything(
     svc: PostService, store: InMemoryBlobStore
 ) -> None:
     pid = ready(svc)
-    svc.publish(pid, if_match=svc.get(pid).body_etag)
-    with pytest.raises(StillPublished):
+    publish(svc, pid)
+    svc.checkpoint(pid)
+    with pytest.raises(ConfirmationRequired):
         svc.delete(pid)
-    svc.unpublish(pid)
-    svc.delete(pid)
+    assert svc.get(pid).published_version == 1  # nothing happened
+    svc.delete(pid, confirmed=True)
     assert store.list(layout.DRAFTS, f"posts/{pid}/") == []
-    assert svc.list_drafts() == []
+    assert store.list(layout.PUBLISHED, f"posts/{pid}/") == []
+    assert store.read(layout.PUBLISHED, "slugs/hello.json") is None
+    assert pid not in published_bytes(store, layout.INDEX).decode()
+
+
+def test_delete_after_unpublish_still_needs_confirmation(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    pid = ready(svc)
+    publish(svc, pid)
+    svc.unpublish(pid)
+    with pytest.raises(ConfirmationRequired):
+        svc.delete(pid)
+    svc.delete(pid, confirmed=True)
+    assert store.list(layout.PUBLISHED, f"posts/{pid}/") == []
+
+
+def test_delete_leaves_a_slug_reference_owned_by_another_post(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    owner = ready(svc, slug="same")
+    publish(svc, owner)
+    other = ready(svc, slug="same")  # a draft may carry a published post's slug
+    svc.delete(other)
+    assert store.read(layout.PUBLISHED, "slugs/same.json") is not None
+    assert svc.get(owner).published_version == 1
+
+
+def test_the_slug_is_free_after_a_delete(svc: PostService) -> None:
+    old = ready(svc)
+    publish(svc, old)
+    svc.delete(old, confirmed=True)
+    new = ready(svc, body="New body.")
+    assert publish(svc, new).slug == "hello"
+
+
+def test_delete_retry_after_the_body_is_gone_finishes_the_job(
+    svc: PostService, store: InMemoryBlobStore
+) -> None:
+    pid = ready(svc)
+    store.delete(layout.DRAFTS, layout.draft_body(pid))
+    with pytest.raises(PostNotFound):
+        svc.get(pid)
+    assert [d.post_id for d in svc.list_drafts()] == [pid]  # still listed
+    svc.delete(pid)
+    assert store.list(layout.DRAFTS, "posts/") == []
+
+
+def test_delete_of_an_unknown_post(svc: PostService) -> None:
+    with pytest.raises(PostNotFound):
+        svc.delete("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+
+
+class DeletesStore(InMemoryBlobStore):
+    """Records every delete and can fail on the nth one."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.order: list[tuple[str, str]] = []
+        self.fail_at: int | None = None
+
+    def delete(self, container: str, path: str) -> None:
+        self.order.append((container, path))
+        if self.fail_at == len(self.order):
+            raise StoreError("boom")
+        super().delete(container, path)
+
+
+def _published_with_revisions(store: DeletesStore) -> tuple[PostService, str]:
+    svc = PostService(store, clock=Clock())
+    pid = ready(svc)
+    publish(svc, pid)
+    svc.checkpoint(pid)
+    return svc, pid
+
+
+def _delete_calls() -> int:
+    store = DeletesStore()
+    svc, pid = _published_with_revisions(store)
+    store.order.clear()
+    svc.delete(pid, confirmed=True)
+    return len(store.order)
+
+
+def test_the_draft_json_goes_last_and_the_published_side_goes_first() -> None:
+    store = DeletesStore()
+    svc, pid = _published_with_revisions(store)
+    store.order.clear()
+    svc.delete(pid, confirmed=True)
+    assert store.order[-1] == (layout.DRAFTS, layout.draft_meta(pid))
+    kinds = [container for container, _ in store.order]
+    assert layout.PUBLISHED not in kinds[kinds.index(layout.DRAFTS) :]
+
+
+def test_a_failed_delete_can_be_retried_to_the_end() -> None:
+    for n in range(1, _delete_calls() + 1):  # in the test: a broken delete fails one test, not collection
+        store = DeletesStore()
+        svc, pid = _published_with_revisions(store)
+        store.order.clear()
+        store.fail_at = n
+        with pytest.raises(StoreError):
+            svc.delete(pid, confirmed=True)
+        store.fail_at = None
+        svc.delete(pid, confirmed=True)
+        assert store.list(layout.DRAFTS, f"posts/{pid}/") == [], f"failing delete {n}"
+        assert store.list(layout.PUBLISHED, f"posts/{pid}/") == [], f"failing delete {n}"
+        assert store.read(layout.PUBLISHED, "slugs/hello.json") is None, f"failing delete {n}"
+        assert pid not in published_bytes(store, layout.INDEX).decode(), f"failing delete {n}"
 
 
 def test_a_body_save_moves_updated_at_and_leaves_the_details_etag(timed) -> None:

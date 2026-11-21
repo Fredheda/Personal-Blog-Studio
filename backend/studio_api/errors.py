@@ -33,8 +33,11 @@ class SlugTaken(PostError):
     """Another published post owns this slug."""
 
 
-class StillPublished(PostError):
-    """Unpublish before deleting."""
+CONFIRMATION_REQUIRED_TYPE = "urn:blog-studio:confirmation-required"
+
+
+class ConfirmationRequired(PostError):
+    """The post was published once; the caller must confirm the delete."""
 
 
 class MissingMedia(PostError):
