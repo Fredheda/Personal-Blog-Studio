@@ -7,6 +7,8 @@ list, a write role for the read API, a secret that leaks to another app.
 import re
 from pathlib import Path
 
+from blog_core import layout
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAIN = (REPO_ROOT / "infra" / "main.bicep").read_text()
 STORAGE = (REPO_ROOT / "infra" / "storage.bicep").read_text()
@@ -221,3 +223,21 @@ def test_the_web_app_lets_its_custom_domain_pass_the_easy_auth_csrf_check() -> N
     ) in web
     for other in ("studioApiAuth", "blogApiAuth"):
         assert "login:" not in block(MAIN, other), other
+
+
+def test_the_bicep_container_names_are_the_code_defaults() -> None:
+    drafts = re.findall(r"name: 'BLOG_DRAFTS_CONTAINER'\s+value: '([^']+)'", MAIN)
+    published = re.findall(r"name: 'BLOG_PUBLISHED_CONTAINER'\s+value: '([^']+)'", MAIN)
+    assert drafts == [layout.DEFAULT_DRAFTS]
+    assert published == [layout.DEFAULT_PUBLISHED, layout.DEFAULT_PUBLISHED]
+    assert f"param draftsContainerName string = '{layout.DEFAULT_DRAFTS}'" in STORAGE
+    assert (
+        f"param publishedContainerName string = '{layout.DEFAULT_PUBLISHED}'" in STORAGE
+    )
+
+
+def test_the_web_app_gets_the_studio_audience() -> None:
+    assert re.search(
+        r"name: 'STUDIO_API_AUDIENCE'\s+value: 'api://\$\{studioApiClientId\}'",
+        block(MAIN, "web"),
+    )

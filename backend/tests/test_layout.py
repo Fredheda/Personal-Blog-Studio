@@ -1,8 +1,30 @@
+import importlib
+from collections.abc import Callable
+from types import ModuleType
+
 import pytest
 
 from blog_core import layout
 
 P = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+VARIABLES = ("BLOG_DRAFTS_CONTAINER", "BLOG_PUBLISHED_CONTAINER")
+
+
+@pytest.fixture
+def load_layout(monkeypatch: pytest.MonkeyPatch):
+    """Reload `layout` under chosen container variables; defaults again afterwards."""
+
+    def load(**env: str) -> ModuleType:
+        for name in VARIABLES:
+            monkeypatch.delenv(name, raising=False)
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        return importlib.reload(layout)
+
+    yield load
+    for name in VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    importlib.reload(layout)
 
 
 def test_container_names_and_index() -> None:
@@ -11,6 +33,47 @@ def test_container_names_and_index() -> None:
         "blog-published",
         "index.json",
     )
+    assert (layout.DEFAULT_DRAFTS, layout.DEFAULT_PUBLISHED) == (
+        "blog-drafts",
+        "blog-published",
+    )
+
+
+def test_the_environment_names_the_containers(
+    load_layout: Callable[..., ModuleType],
+) -> None:
+    loaded = load_layout(
+        BLOG_DRAFTS_CONTAINER="blog-drafts-dev",
+        BLOG_PUBLISHED_CONTAINER="blog-published-dev",
+    )
+    assert (loaded.DRAFTS, loaded.PUBLISHED) == (
+        "blog-drafts-dev",
+        "blog-published-dev",
+    )
+
+
+def test_an_empty_variable_means_the_default(
+    load_layout: Callable[..., ModuleType],
+) -> None:
+    loaded = load_layout(BLOG_DRAFTS_CONTAINER="", BLOG_PUBLISHED_CONTAINER="")
+    assert (loaded.DRAFTS, loaded.PUBLISHED) == ("blog-drafts", "blog-published")
+
+
+@pytest.mark.parametrize("bad", ["Blog-Drafts", "ab", "-x-", "a/b", "x" * 64, "a b"])
+def test_a_malformed_container_name_refuses_to_load(
+    load_layout: Callable[..., ModuleType], bad: str
+) -> None:
+    with pytest.raises(ValueError, match="BLOG_DRAFTS_CONTAINER"):
+        load_layout(BLOG_DRAFTS_CONTAINER=bad)
+
+
+def test_equal_container_names_refuse_to_load(
+    load_layout: Callable[..., ModuleType],
+) -> None:
+    with pytest.raises(ValueError, match="must differ"):
+        load_layout(
+            BLOG_DRAFTS_CONTAINER="blog-same", BLOG_PUBLISHED_CONTAINER="blog-same"
+        )
 
 
 def test_draft_paths() -> None:
