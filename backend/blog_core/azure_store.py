@@ -88,7 +88,7 @@ class AzureBlobStore:
 
     def delete(self, container: str, path: str) -> None:
         try:
-            self._blob(container, path).delete_blob()
+            self._blob(container, path).delete_blob(delete_snapshots="include")
         except ResourceNotFoundError:
             pass
 

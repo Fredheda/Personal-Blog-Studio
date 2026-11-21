@@ -29,13 +29,13 @@ from blog_core.models import (
 )
 from blog_core.store import Blob, BlobStore, PreconditionFailed
 from studio_api.errors import (
+    ConfirmationRequired,
     Conflict,
     MissingMedia,
     PostNotFound,
     SlugLocked,
     SlugTaken,
     StaleEtag,
-    StillPublished,
     ValidationFailed,
 )
 from studio_api.markdown import MAX_BODY_BYTES, Problem, validate_body
@@ -256,12 +256,31 @@ class PostService:
             raise StaleEtag("the draft's details changed; reload it") from e
         return self.get(post_id)
 
-    def delete(self, post_id: str) -> None:
-        draft = self.get(post_id)
-        if self._is_published(draft):
-            raise StillPublished("unpublish the post before deleting it")
-        for name in self._store.list(layout.DRAFTS, layout.post_folder(post_id)):
+    def delete(self, post_id: str, *, confirmed: bool = False) -> None:
+        """Take the post off the site and remove every blob of it.
+
+        Each step is idempotent and `draft.json` goes last, so a failed delete
+        leaves a listed post whose Delete finishes the job. `confirmed` only
+        gates the confirmation, never which steps run.
+        """
+        meta_blob = self._store.read(layout.DRAFTS, layout.draft_meta(post_id))
+        if meta_blob is None:
+            raise PostNotFound(post_id)
+        slug = DraftMeta.model_validate_json(meta_blob.content).slug
+        if not confirmed and (
+            post_id in self._index_entries() or self._ever_published(post_id)
+        ):
+            raise ConfirmationRequired("the post was published; confirm to delete it")
+        self._take_down(post_id, slug)
+        for name in self._store.list(layout.DRAFTS, layout.revision_prefix(post_id)):
             self._store.delete(layout.DRAFTS, name)
+        self._store.delete(layout.DRAFTS, layout.draft_body(post_id))
+        self._take_down(post_id, slug)  # a publish that raced with this delete
+        meta_path = layout.draft_meta(post_id)
+        for name in self._store.list(layout.DRAFTS, layout.post_folder(post_id)):
+            if name != meta_path:
+                self._store.delete(layout.DRAFTS, name)
+        self._store.delete(layout.DRAFTS, meta_path)
 
     # revisions --------------------------------------------------------------
 
@@ -402,6 +421,10 @@ class PostService:
                 reverse=True,
             )
         )
+        if self._store.read(layout.DRAFTS, layout.draft_body(post_id)) is None:
+            # The post was deleted while this publish ran: undo our own writes.
+            self._take_down(post_id, meta.slug)
+            raise PostNotFound(post_id)
         return published
 
     def unpublish(self, post_id: str) -> None:
@@ -431,6 +454,20 @@ class PostService:
     def _require(self, post_id: str) -> None:
         if self._store.read(layout.DRAFTS, layout.draft_meta(post_id)) is None:
             raise PostNotFound(post_id)
+
+    def _take_down(self, post_id: str, slug: str) -> None:
+        """Remove everything public about the post. Reads no draft; idempotent."""
+        if post_id in self._index_entries():
+            self._update_index(lambda items: [i for i in items if i.post_id != post_id])
+        if slug and is_slug(slug):
+            ref = self._store.read(layout.PUBLISHED, layout.slug_ref(slug))
+            if (
+                ref is not None
+                and SlugRef.model_validate_json(ref.content).post_id == post_id
+            ):
+                self._store.delete(layout.PUBLISHED, layout.slug_ref(slug))
+        for name in self._store.list(layout.PUBLISHED, layout.versions_prefix(post_id)):
+            self._store.delete(layout.PUBLISHED, name)
 
     def _is_published(self, draft: Draft) -> bool:
         if not draft.meta.slug or not is_slug(draft.meta.slug):
