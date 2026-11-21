@@ -229,8 +229,8 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       <input id="tags" value={tags} onChange={(e) => setTags(e.target.value)} />
 
       <div className="tabs" role="group" aria-label="View">
-        <button type="button" aria-pressed={view === "edit"} onClick={() => setView("edit")}>Edit</button>
-        <button type="button" aria-pressed={view === "preview"} onClick={() => setView("preview")}>Preview</button>
+        <Button aria-pressed={view === "edit"} onClick={() => setView("edit")}>Edit</Button>
+        <Button aria-pressed={view === "preview"} onClick={() => setView("preview")}>Preview</Button>
       </div>
       <div hidden={view !== "edit"}>
         <CrepeEditor
@@ -250,17 +250,16 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       )}
       <p className="status" role="status">{STATUS_TEXT[status]}</p>
 
-      <button
-        type="button"
+      <Button
         disabled={busy || conflict || (!metaDirty && !bodyUnsaved)}
         onClick={() => void saveAll()}
       >
         Save
-      </button>
+      </Button>
 
       <hr />
-      <button
-        type="button"
+      <Button
+        variant="primary"
         disabled={busy || conflict || metaDirty || bodyUnsaved}
         title={metaDirty || bodyUnsaved ? "Save your edits first" : undefined}
         onClick={() =>
@@ -271,9 +270,8 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         }
       >
         Publish
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
         onClick={() =>
           run(async () => {
             await client.unpublish(id);
@@ -282,7 +280,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         }
       >
         Unpublish
-      </button>
+      </Button>
 
       {conflict && (
         <MessageStrip

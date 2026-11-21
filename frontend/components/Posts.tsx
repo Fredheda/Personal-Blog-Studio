@@ -7,6 +7,9 @@ import { useEffect, useMemo, useState } from "react";
 import { postStatus } from "../lib/live-status";
 import { ApiError } from "../lib/problem";
 import { createStudioApi, isConfirmationRequired, type ListItem, type StudioApi } from "../lib/studio-api";
+import { Button } from "./Button";
+import { Dialog } from "./Dialog";
+import { Pill } from "./Pill";
 import { ProblemList } from "./ProblemList";
 
 export function Posts({ api }: { api?: StudioApi }) {
@@ -17,6 +20,7 @@ export function Posts({ api }: { api?: StudioApi }) {
   const [title, setTitle] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [ask, setAsk] = useState<{ post: ListItem; kind: "draft" | "post" } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -39,20 +43,26 @@ export function Posts({ api }: { api?: StudioApi }) {
     }
   }
 
-  async function remove(post: ListItem) {
-    const name = post.title || "(untitled)";
-    const kept = "You can get it back for 7 days by asking.";
-    if (!window.confirm(`Delete "${name}"? ${kept}`)) return;
+  function startDelete(post: ListItem) {
     setError(null);
+    setAsk({ post, kind: post.published ? "post" : "draft" });
+  }
+
+  async function confirmDelete({ post, kind }: { post: ListItem; kind: "draft" | "post" }) {
+    setAsk(null);
     setBusyId(post.postId);
     const drop = () => setItems((list) => list && list.filter((p) => p.postId !== post.postId));
     try {
-      try {
-        await client.deletePost(post.postId);
-      } catch (e) {
-        if (!isConfirmationRequired(e)) throw e;
-        if (!window.confirm(`It was published: deleting takes it off the public site and removes it. ${kept}`)) return;
+      if (kind === "post") {
         await client.deletePost(post.postId, { confirm: "published" });
+      } else {
+        try {
+          await client.deletePost(post.postId);
+        } catch (e) {
+          if (!isConfirmationRequired(e)) throw e;
+          setAsk({ post, kind: "post" }); // it was published once: ask again, in the post's words
+          return;
+        }
       }
       drop();
     } catch (e) {
@@ -75,7 +85,7 @@ export function Posts({ api }: { api?: StudioApi }) {
           Title
           <input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
         </label>
-        <button type="submit" disabled={title.trim() === ""}>Create post</button>
+        <Button type="submit" variant="primary" disabled={title.trim() === ""}>Create post</Button>
       </form>
       <ProblemList error={error} />
       <ProblemList error={loadError} />
@@ -85,18 +95,32 @@ export function Posts({ api }: { api?: StudioApi }) {
           {items.map((post) => (
             <li key={post.postId}>
               <Link href={`/posts/${post.postId}`}>{post.title || "(untitled)"}</Link>
-              <span className="muted">{post.slug ? ` /${post.slug}` : ""} · {postStatus(post)} · {post.updatedAt}</span>
-              <button
-                type="button"
+              <span className="muted">{post.slug ? ` /${post.slug} · ` : " "}</span>
+              <Pill tone={post.published ? "published" : "draft"}>{postStatus(post)}</Pill>
+              <span className="muted"> · {post.updatedAt}</span>
+              <Button
                 aria-label={`Delete ${post.title || "(untitled)"}`}
                 disabled={busyId === post.postId}
-                onClick={() => void remove(post)}
+                onClick={() => startDelete(post)}
               >
                 Delete
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
+      )}
+      {ask && (
+        <Dialog
+          title={ask.kind === "draft" ? "Delete this draft?" : "Delete this post?"}
+          cancelLabel="Keep it"
+          confirmLabel={ask.kind === "draft" ? "Delete draft" : "Delete post"}
+          onCancel={() => setAsk(null)}
+          onConfirm={() => void confirmDelete(ask)}
+        >
+          {ask.kind === "draft"
+            ? `"${ask.post.title || "(untitled)"}" and its revisions are removed. You can get it back for 7 days by asking.`
+            : `"${ask.post.title || "(untitled)"}" is taken off the blog and removed, with its published versions. You can get it back for 7 days by asking.`}
+        </Dialog>
       )}
     </section>
   );
