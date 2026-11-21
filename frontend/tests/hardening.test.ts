@@ -48,6 +48,10 @@ test("no web-font loading in source", () => {
   expect(offenders).toEqual([]);
 });
 
+test("the theme stylesheet loads nothing by URL", () => {
+  expect(readFileSync(join(ROOT, "app", "globals.css"), "utf8")).not.toMatch(/url\(/);
+});
+
 test("Dockerfile runs as a non-root user and serves the standalone build", () => {
   const text = readFileSync(join(ROOT, "Dockerfile"), "utf8");
   expect(text).toMatch(/^USER node$/m);

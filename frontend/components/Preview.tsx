@@ -1,6 +1,9 @@
 "use client";
 
+import matlab from "highlight.js/lib/languages/matlab";
+import { common } from "lowlight";
 import ReactMarkdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -12,11 +15,14 @@ import remarkMath from "remark-math";
  *  the Markdown is never fetched. */
 export function Preview({ markdown }: { markdown: string }) {
   return (
-    <article className="preview">
+    <article className="post-body">
       <ReactMarkdown
         skipHtml
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[[rehypeKatex, { output: "mathml", throwOnError: false }]]}
+        rehypePlugins={[
+          [rehypeKatex, { output: "mathml", throwOnError: false }],
+          [rehypeHighlight, { languages: { ...common, matlab }, plainText: ["math", "text", "txt"] }],
+        ]}
         components={{ img: ({ alt }) => <em>{alt ?? ""}</em> }}
       >
         {markdown}

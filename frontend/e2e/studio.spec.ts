@@ -72,15 +72,66 @@ test("typing in the editor autosaves the text through the real ETag flow", async
   await expect.poll(async () => (await stored(request, postId)).body).toContain("Hello from the browser");
 });
 
-test("the Preview shows a table with a grid and a boxed code block", async ({ page, request }) => {
-  const body = "| a | b |\n| - | - |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n";
-  const { postId } = await createPost(request, { title: unique("Table"), body });
+test("the studio is dark and its page elements are restyled", async ({ page, request }) => {
+  const title = unique("Dark");
+  await createPost(request, { title });
+  await page.goto("/");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(16, 18, 23)");
+  await expect(page.getByRole("heading", { name: "Blog Studio", level: 1 })).toHaveCSS("font-size", "30px");
+  await expect(page.getByRole("link", { name: title, exact: true })).toHaveCSS("text-decoration-line", "underline");
+});
+
+test("the top bar leads back to the list and marks the current page", async ({ page, request }) => {
+  const { postId } = await createPost(request, { title: unique("Bar") });
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "All posts", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.goto(`/posts/${postId}`);
+  await expect(page.getByRole("link", { name: "All posts", exact: true })).not.toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: "Studio", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("the Preview shows headings, lists, links, maths, a table and a boxed code block", async ({ page, request }) => {
+  const body =
+    "# Big\n\n- one\n- two\n\nA [link](https://example.com) and $a^2$.\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n";
+  const { postId } = await createPost(request, { title: unique("Elements"), body });
   await page.goto(`/posts/${postId}`);
   await page.getByRole("button", { name: "Preview" }).click();
-  await expect(page.locator(".preview th").first()).toHaveCSS("font-weight", "700");
-  await expect(page.locator(".preview th").first()).toHaveCSS("background-color", "rgb(238, 238, 238)");
-  await expect(page.locator(".preview td").first()).toHaveCSS("border-top-width", "1px");
-  await expect(page.locator(".preview pre")).toHaveCSS("overflow-x", "auto");
+  await expect(page.locator(".post-body h1")).toHaveCSS("font-size", "33px");
+  await expect(page.locator(".post-body ul")).toHaveCSS("list-style-type", "disc");
+  await expect(page.locator(".post-body a")).toHaveCSS("text-decoration-line", "underline");
+  await expect(page.locator(".post-body math")).toHaveCount(1);
+  await expect(page.locator(".post-body th").first()).toHaveCSS("font-weight", "600");
+  await expect(page.locator(".post-body th").first()).toHaveCSS("background-color", "rgb(32, 36, 45)");
+  await expect(page.locator(".post-body td").first()).toHaveCSS("border-top-width", "1px");
+  await expect(page.locator(".post-body pre")).toHaveCSS("overflow-x", "auto");
+  await expect(page.locator(".post-body pre")).toHaveCSS("background-color", "rgb(11, 13, 17)");
+});
+
+test("the Preview colours Python code with the token colours, also for a capital-P fence", async ({ page, request }) => {
+  const body = "```Python\ndef f():\n    return True\n\nprint(f(), 1)\n```\n";
+  const { postId } = await createPost(request, { title: unique("Code"), body });
+  await page.goto(`/posts/${postId}`);
+  await page.getByRole("button", { name: "Preview" }).click();
+  await expect(page.locator(".post-body .hljs-keyword").first()).toHaveCSS("color", "rgb(185, 168, 255)");
+  await expect(page.locator(".post-body .hljs-literal")).toHaveCSS("color", "rgb(255, 196, 107)");
+  await expect(page.locator(".post-body .hljs-number")).toHaveCSS("color", "rgb(255, 196, 107)");
+  await expect(page.locator(".post-body .hljs-built_in")).toHaveCSS("color", "rgb(127, 224, 255)");
+});
+
+test("the editor is dark, shares the Preview's type and colours code with the token colours", async ({ page, request }) => {
+  const body = "## Heading\n\n#### Small\n\n- one\n- two\n\n```Python\ndef f():\n    return 1\n```\n";
+  const { postId } = await createPost(request, { title: unique("Editor"), body });
+  await page.goto(`/posts/${postId}`);
+  await expect(page.locator(".crepe-host .milkdown")).toHaveCSS("background-color", "rgb(16, 18, 23)");
+  await expect(page.locator(".milkdown .ProseMirror h2")).toHaveCSS("font-size", "21.78px");
+  await expect(page.locator(".milkdown .ProseMirror h4")).toHaveCSS("font-size", "16.5px");
+  await expect(page.locator(".milkdown .label-wrapper").first()).toBeVisible();
+  await expect(page.locator(".milkdown .label-wrapper").first()).toHaveCSS("color", "rgb(152, 161, 179)");
+  const block = page.locator(".milkdown .milkdown-code-block").first();
+  await block.scrollIntoViewIfNeeded();
+  await expect(block.locator(".cm-editor")).toHaveCSS("background-color", "rgb(11, 13, 17)");
+  await expect(block.locator(".cm-content span", { hasText: "def" }).first()).toHaveCSS("color", "rgb(185, 168, 255)");
 });
 
 test("Delete removes a draft after one question and a published post after two", async ({ page, request }) => {

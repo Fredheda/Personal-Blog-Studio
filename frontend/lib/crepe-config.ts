@@ -1,6 +1,7 @@
 import { languages } from "@codemirror/language-data";
 import { Crepe } from "@milkdown/crepe";
 
+import { studioCodeTheme } from "./code-theme";
 import { matlab } from "./matlab";
 
 export const crepeFeatures = {
@@ -15,6 +16,7 @@ export const crepeFeatureConfigs = {
   },
   [Crepe.Feature.CodeMirror]: {
     languages: [matlab, ...languages],
+    theme: studioCodeTheme,
   },
   [Crepe.Feature.Placeholder]: {
     text: "Write your post. Type / for blocks.",

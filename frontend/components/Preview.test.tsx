@@ -36,3 +36,26 @@ test("a javascript: link is not turned into a live link", () => {
   const href = container.querySelector("a")?.getAttribute("href") ?? "";
   expect(href).not.toMatch(/^\s*(javascript|data|vbscript):/i);
 });
+
+test("the Preview is the shared post body", () => {
+  const { container } = render(<Preview markdown="# Hi" />);
+  expect(container.querySelector("article.post-body")).not.toBeNull();
+});
+
+test("code is highlighted, also when the fence language has capitals", () => {
+  const { container } = render(<Preview markdown={"```Python\ndef f():\n    return 1\n```"} />);
+  expect(container.querySelector("pre code .hljs-keyword")?.textContent).toBe("def");
+  expect(container.querySelector("pre code .hljs-number")?.textContent).toBe("1");
+});
+
+test("MATLAB code is highlighted", () => {
+  const { container } = render(<Preview markdown={"```matlab\n% a comment\nx = 1;\n```"} />);
+  expect(container.querySelector("pre code .hljs-comment")?.textContent).toBe("% a comment");
+});
+
+test("an unknown language renders as plain code and does not break the Preview", () => {
+  const { container } = render(<Preview markdown={"```klingon\nqapla'\n```\n\nAfter."} />);
+  expect(container.querySelector("pre code")?.textContent).toContain("qapla'");
+  expect(container.querySelector("pre code [class^='hljs-']")).toBeNull();
+  expect(container.textContent).toContain("After.");
+});
