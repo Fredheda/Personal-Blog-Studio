@@ -1,6 +1,6 @@
 # Read API image. Build context is backend/: `docker build -f Dockerfile.blogapi .`
 # Contains blog_core and blog_api only: no studio, agent or LLM code.
-FROM python:3.13-slim AS builder
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir pip==26.2.2 \
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-interaction --no-ansi
 
-FROM python:3.13-slim
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
 WORKDIR /app
 RUN useradd --system --uid 10001 --no-create-home appuser
