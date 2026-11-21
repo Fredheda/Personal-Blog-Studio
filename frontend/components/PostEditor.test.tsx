@@ -404,8 +404,8 @@ test("the Preview tab renders the typed Markdown, maths as MathML, and keeps the
   render(<PostEditor id={draft.postId} api={fakeApi()} />);
   fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "# Big\n\n$a^2$" } });
   fireEvent.click(screen.getByRole("button", { name: "Preview" }));
-  expect(document.querySelector(".preview h1")?.textContent).toBe("Big");
-  expect(document.querySelectorAll(".preview math").length).toBeGreaterThan(0);
+  expect(document.querySelector(".post-body h1")?.textContent).toBe("Big");
+  expect(document.querySelectorAll(".post-body math").length).toBeGreaterThan(0);
   fireEvent.click(screen.getByRole("button", { name: "Edit" }));
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("# Big\n\n$a^2$");
 });
