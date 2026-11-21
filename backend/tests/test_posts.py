@@ -655,3 +655,63 @@ def test_check_writes_nothing(svc: PostService, store: InMemoryBlobStore) -> Non
 def test_check_of_an_unknown_post_is_not_found(svc: PostService) -> None:
     with pytest.raises(PostNotFound):
         svc.check("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+
+
+class RacingStore(InMemoryBlobStore):
+    """Runs one action before or after the first write to one blob."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.armed: tuple[str, str, str, Callable[[], None]] | None = None
+
+    def write(self, container: str, path: str, content: bytes, **kwargs) -> str:
+        armed = self.armed
+        hit = armed is not None and armed[:2] == (container, path)
+        if hit and armed is not None and armed[2] == "before":
+            self.armed = None
+            armed[3]()
+        etag = super().write(container, path, content, **kwargs)
+        if hit and armed is not None and armed[2] == "after":
+            self.armed = None
+            armed[3]()
+        return etag
+
+
+def assert_nothing_left(store: InMemoryBlobStore, pid: str) -> None:
+    assert store.list(layout.DRAFTS, f"posts/{pid}/") == []
+    assert store.list(layout.PUBLISHED, f"posts/{pid}/") == []
+    assert store.read(layout.PUBLISHED, "slugs/hello.json") is None
+    index = store.read(layout.PUBLISHED, layout.INDEX)
+    assert index is None or pid not in index.content.decode()
+
+
+def test_a_delete_before_publishes_slug_write_leaves_nothing_public() -> None:
+    store = RacingStore()
+    svc = PostService(store, clock=Clock())
+    pid = ready(svc)
+    etag = svc.get(pid).body_etag
+    store.armed = (
+        layout.PUBLISHED,
+        "slugs/hello.json",
+        "before",
+        lambda: svc.delete(pid, confirmed=True),
+    )
+    with pytest.raises(PostNotFound):
+        svc.publish(pid, if_match=etag)
+    assert_nothing_left(store, pid)
+
+
+def test_a_delete_after_publishes_index_write_leaves_nothing_public() -> None:
+    store = RacingStore()
+    svc = PostService(store, clock=Clock())
+    pid = ready(svc)
+    etag = svc.get(pid).body_etag
+    store.armed = (
+        layout.PUBLISHED,
+        layout.INDEX,
+        "after",
+        lambda: svc.delete(pid, confirmed=True),
+    )
+    with pytest.raises(PostNotFound):
+        svc.publish(pid, if_match=etag)
+    assert_nothing_left(store, pid)

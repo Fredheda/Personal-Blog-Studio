@@ -421,6 +421,10 @@ class PostService:
                 reverse=True,
             )
         )
+        if self._store.read(layout.DRAFTS, layout.draft_body(post_id)) is None:
+            # The post was deleted while this publish ran: undo our own writes.
+            self._take_down(post_id, meta.slug)
+            raise PostNotFound(post_id)
         return published
 
     def unpublish(self, post_id: str) -> None:
