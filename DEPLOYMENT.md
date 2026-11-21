@@ -81,8 +81,8 @@ A complete local run uses the real Azure storage with the production code, but o
 1. One time, the owner's yes (creates the containers and gives the signed-in user Storage Blob Data Contributor on those two containers only; it fails when the user holds any other blob data role, which keeps a wrong setting away from production): `./scripts/setup-dev-storage.sh` (dry run), then `./scripts/setup-dev-storage.sh --apply`. Needs `az login` and `jq`. The output contains the subscription id and the user's object id: do not paste it into chat or tickets.
 2. `cp .env.local.example .env.local && cp frontend/.env.local.example frontend/.env.local` (git-ignored; names and loopback URLs only).
 3. Start three servers from a shell without `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_CLIENT_SECRET` set (so the login used is the checked `az login`, not an environment credential), each as its own harness background task (never `&` with a saved PID), then check each with `lsof -nP -iTCP:<port> -sTCP:LISTEN` (it must show `127.0.0.1`, not `*`):
-   - from `backend/`: `poetry run uvicorn studio_api.app:app --host 127.0.0.1 --port 8300 --env-file ../.env.local`
-   - from `backend/`: `poetry run uvicorn blog_api.app:app --host 127.0.0.1 --port 8301 --env-file ../.env.local`
+   - from `backend/`: `set -a && . ../.env.local && set +a && poetry run uvicorn studio_api.app:app --host 127.0.0.1 --port 8300`
+   - from `backend/`: `set -a && . ../.env.local && set +a && poetry run uvicorn blog_api.app:app --host 127.0.0.1 --port 8301`
    - from `frontend/`: `env -u AI_AGENT -u CLAUDECODE npm run dev -- --port 3300`
 4. Seed once: `cd backend && set -a && . ../.env.local && set +a && poetry run python -m dev_support.seed` (creates a draft, a published post and one published then unpublished; refuses unless the API and the dev container agree).
 5. Open `http://127.0.0.1:3300` (`localhost` is refused by the origin guard).
