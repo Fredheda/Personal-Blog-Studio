@@ -1,20 +1,20 @@
 # Studio image. Build context is frontend/: `docker build -t blogstudio-web .`
-FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS deps
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS deps
 WORKDIR /app
 # npm 12 blocks dependency install scripts unless package.json's `allowScripts`
-# allows them. Pinned exactly; it needs Node ^24.15.0 (the base image is newer).
+# allows them. Pinned exactly; it needs Node ^24.15.0 or >=26 (the base image is newer).
 RUN npm install -g npm@12.2.2 && npm --version
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS builder
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS builder
 WORKDIR /app
 RUN npm install -g npm@12.2.2 && npm --version
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS runner
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS runner
 WORKDIR /app
 # Every stage carries the pin (backend/tests/test_npm_pin.py); the runner
 # never runs npm, so the pin only keeps the three stages uniform.
