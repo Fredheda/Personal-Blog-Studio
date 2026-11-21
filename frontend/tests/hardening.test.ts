@@ -52,6 +52,39 @@ test("the theme stylesheet loads nothing by URL", () => {
   expect(readFileSync(join(ROOT, "app", "globals.css"), "utf8")).not.toMatch(/url\(/);
 });
 
+test("the dev and start scripts bind the loopback address only", () => {
+  const { scripts } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  for (const name of ["dev", "start"]) {
+    expect(scripts[name], `script ${name}`).toMatch(/\s(?:-H|--hostname)[ =]127\.0\.0\.1(?:\s|$)/);
+  }
+});
+
+test("the browser tests start every server on the loopback address only", () => {
+  const config = readFileSync(join(ROOT, "playwright.config.ts"), "utf8");
+  expect(config).not.toContain("0.0.0.0");
+  expect(config).toMatch(/uvicorn [^`]*--host 127\.0\.0\.1/);
+  for (const flag of ["--blobHost", "--queueHost", "--tableHost"]) {
+    expect(config, flag).toContain(`${flag} 127.0.0.1`);
+  }
+  const helpers = readdirSync(join(ROOT, "e2e")).filter((f) => f.endsWith(".ts") && !f.endsWith(".spec.ts"));
+  expect(helpers.length).toBeGreaterThan(0);
+  for (const file of helpers) {
+    const text = readFileSync(join(ROOT, "e2e", file), "utf8");
+    if (text.includes(".listen(")) expect(text, `e2e/${file} listens`).toContain('"127.0.0.1"');
+  }
+});
+
+test("the documented Azurite command binds the loopback address only", () => {
+  const doc = readFileSync(join(ROOT, "..", "DEPLOYMENT.md"), "utf8");
+  const line = doc.split("\n").find((l) => l.includes("node_modules/.bin/azurite"));
+  expect(line, "an Azurite command in DEPLOYMENT.md").toBeDefined();
+  for (const flag of ["--blobHost", "--queueHost", "--tableHost"]) {
+    expect(line, flag).toContain(`${flag} 127.0.0.1`);
+  }
+});
+
 test("Dockerfile runs as a non-root user and serves the standalone build", () => {
   const text = readFileSync(join(ROOT, "Dockerfile"), "utf8");
   expect(text).toMatch(/^USER node$/m);
