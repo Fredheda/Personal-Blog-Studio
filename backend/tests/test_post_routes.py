@@ -293,8 +293,49 @@ def test_publish_then_republish_then_unpublish_then_delete(
     assert client.post(f"/posts/{pid}/publish").status_code == 428
     assert client.post(f"/posts/{pid}/unpublish").status_code == 204
     assert client.post(f"/posts/{pid}/unpublish").status_code == 204
+    assert client.delete(f"/posts/{pid}").status_code == 409  # was published once
+    assert client.delete(f"/posts/{pid}?confirm=published").status_code == 204
+    assert client.get(f"/posts/{pid}").status_code == 404
+
+
+def test_delete_of_a_never_published_draft_needs_no_confirmation(
+    client: TestClient,
+) -> None:
+    pid = new_draft(client)["postId"]
     assert client.delete(f"/posts/{pid}").status_code == 204
     assert client.get(f"/posts/{pid}").status_code == 404
+    assert client.delete(f"/posts/{pid}").status_code == 404
+
+
+def test_delete_of_a_published_post_needs_exactly_confirm_published(
+    client: TestClient,
+) -> None:
+    d = ready(client)
+    pid = d["postId"]
+    client.post(f"/posts/{pid}/publish", headers={"If-Match": d["bodyEtag"]})
+    refused = client.delete(f"/posts/{pid}")
+    assert refused.status_code == 409
+    assert refused.json()["type"] == "urn:blog-studio:confirmation-required"
+    assert refused.json()["title"] == "Confirmation required"
+    assert client.delete(f"/posts/{pid}?confirm=yes").status_code == 409
+    assert client.get(f"/posts/{pid}").status_code == 200
+    assert client.delete(f"/posts/{pid}?confirm=published").status_code == 204
+    assert client.get(f"/posts/{pid}").status_code == 404
+
+
+def test_the_confirmation_409_is_told_apart_from_other_409s(
+    client: TestClient,
+) -> None:
+    d = ready(client)
+    pid = d["postId"]
+    client.post(f"/posts/{pid}/publish", headers={"If-Match": d["bodyEtag"]})
+    locked = client.patch(
+        f"/posts/{pid}/meta",
+        json={"slug": "changed"},
+        headers={"If-Match": client.get(f"/posts/{pid}").json()["metaEtag"]},
+    )
+    assert locked.status_code == 409 and locked.json()["type"] == "about:blank"
+    assert client.delete(f"/posts/{pid}").json()["type"] != locked.json()["type"]
 
 
 def test_checkpoint_list_read_and_restore(client: TestClient) -> None:

@@ -18,7 +18,6 @@ _STATUS = {
     errors.Conflict: (409, "Conflict"),
     errors.SlugLocked: (409, "Conflict"),
     errors.SlugTaken: (409, "Conflict"),
-    errors.StillPublished: (409, "Conflict"),
 }
 
 
@@ -61,6 +60,13 @@ def create_app(
 
     @app.exception_handler(errors.PostError)
     def _post_error(_: Request, e: errors.PostError):
+        if isinstance(e, errors.ConfirmationRequired):
+            return problem(
+                409,
+                "Confirmation required",
+                str(e),
+                type=errors.CONFIRMATION_REQUIRED_TYPE,
+            )
         if isinstance(e, errors.ValidationFailed):
             return problem(
                 422,

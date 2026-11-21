@@ -29,8 +29,8 @@ from blog_core.models import (
 )
 from blog_core.store import Blob, BlobStore, PreconditionFailed
 from studio_api.errors import (
-    Conflict,
     ConfirmationRequired,
+    Conflict,
     MissingMedia,
     PostNotFound,
     SlugLocked,

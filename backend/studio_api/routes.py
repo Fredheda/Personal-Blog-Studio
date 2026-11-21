@@ -199,8 +199,10 @@ def create_router() -> APIRouter:
         return _draft_out(service.update_meta(post_id, patch, if_match=if_match))
 
     @router.delete("/posts/{post_id}", status_code=204)
-    def delete(post_id: PostId, service: Service) -> Response:
-        service.delete(post_id)
+    def delete(
+        post_id: PostId, service: Service, confirm: str | None = None
+    ) -> Response:
+        service.delete(post_id, confirmed=confirm == "published")
         return Response(status_code=204)
 
     @router.post("/posts/{post_id}/revisions", status_code=201)

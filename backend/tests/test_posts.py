@@ -8,8 +8,8 @@ from blog_core import layout
 from blog_core.models import DraftMeta, MediaMeta
 from blog_core.store import Blob, StoreError
 from studio_api.errors import (
-    Conflict,
     ConfirmationRequired,
+    Conflict,
     MissingMedia,
     PostNotFound,
     SlugLocked,
@@ -436,8 +436,21 @@ def test_the_draft_json_goes_last_and_the_published_side_goes_first() -> None:
     assert layout.PUBLISHED not in kinds[kinds.index(layout.DRAFTS) :]
 
 
+def _left_of(store: InMemoryBlobStore, pid: str) -> list[str]:
+    """Every blob and reference that still names the post."""
+    index = store.read(layout.PUBLISHED, layout.INDEX)
+    indexed = [layout.INDEX] if index and pid in index.content.decode() else []
+    return [
+        *store.list(layout.DRAFTS, f"posts/{pid}/"),
+        *store.list(layout.PUBLISHED, f"posts/{pid}/"),
+        *store.list(layout.PUBLISHED, "slugs/"),
+        *indexed,
+    ]
+
+
 def test_a_failed_delete_can_be_retried_to_the_end() -> None:
-    for n in range(1, _delete_calls() + 1):  # in the test: a broken delete fails one test, not collection
+    # The loop is inside the test: a broken delete then fails one test, not collection.
+    for n in range(1, _delete_calls() + 1):
         store = DeletesStore()
         svc, pid = _published_with_revisions(store)
         store.order.clear()
@@ -446,10 +459,7 @@ def test_a_failed_delete_can_be_retried_to_the_end() -> None:
             svc.delete(pid, confirmed=True)
         store.fail_at = None
         svc.delete(pid, confirmed=True)
-        assert store.list(layout.DRAFTS, f"posts/{pid}/") == [], f"failing delete {n}"
-        assert store.list(layout.PUBLISHED, f"posts/{pid}/") == [], f"failing delete {n}"
-        assert store.read(layout.PUBLISHED, "slugs/hello.json") is None, f"failing delete {n}"
-        assert pid not in published_bytes(store, layout.INDEX).decode(), f"failing delete {n}"
+        assert _left_of(store, pid) == [], f"after failing delete {n}"
 
 
 def test_a_body_save_moves_updated_at_and_leaves_the_details_etag(timed) -> None:
