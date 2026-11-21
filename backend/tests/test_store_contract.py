@@ -125,3 +125,20 @@ def test_a_rewrite_never_moves_the_modified_time_back(stores) -> None:
     first = store.modified_times(a, "f")["f"]
     store.write(a, "f", b"2")
     assert store.modified_times(a, "f")["f"] >= first
+
+
+def test_delete_removes_a_blob_that_has_snapshots(stores) -> None:
+    """A restored blob carries its soft-deleted snapshots as active snapshots;
+    a plain delete of such a blob fails and the snapshots stay billed."""
+    store, a, _ = stores
+    if not hasattr(store, "service"):
+        pytest.skip("snapshots exist only in Azure storage")
+    store.write(a, "f", b"1")
+    store._blob(a, "f").create_snapshot()
+    store.write(a, "f", b"2")
+    store.delete(a, "f")
+    assert store.read(a, "f") is None
+    left = store.service.get_container_client(a).list_blobs(
+        name_starts_with="f", include=["snapshots"]
+    )
+    assert [b.name for b in left] == []
