@@ -65,10 +65,11 @@ Start Azurite (local only) on its default ports, run the contract against it, st
 
 ```bash
 mkdir -p /tmp/azurite-blog && frontend/e2e/azurite/node_modules/.bin/azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog &
+AZURITE_PID=$!
 cd backend
 export AZURITE_CONNECTION_STRING="UseDevelopmentStorage=true"
-poetry run pytest tests/test_store_contract.py -q   # expect 24 passed
-lsof -ti :10000 | xargs kill
+poetry run pytest tests/test_store_contract.py -q   # expect 25 passed, 1 skipped
+kill "$AZURITE_PID"
 ```
 
 CI runs Azurite only for the browser tests; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change.
@@ -86,6 +87,16 @@ CI runs Azurite only for the browser tests; the in-memory fake is held to the sa
 - **Entra writes are re-applied on every run.** `setup-api-auth.sh` and `setup-easyauth.sh` set the identifier URI, token version 2, the role and assignment-required each time, so a re-run repairs an app that was changed by hand. Two apps with the same display name stop the scripts. App lookups use an exact `--filter "displayName eq '<name>'"`: `az ad app list --display-name` matches every name that starts with the value (`blogapi` also matches `blogapi-gate-caller`), so never use it to find one app.
 - **The gate's step 3 requires HTTP 200 from /v1/posts** (an empty list until a post is published); a 404 fails it.
 - **Admitting a second studio user** is an Entra assignment on `blogstudio-easyauth` plus a change to the Bicep: `ownerObjectId` becomes a list of object IDs in `allowedPrincipals.identities`. There is no script for it on purpose; the studio has one user.
+
+## Restore a deleted post (by hand, within 7 days)
+
+Deleting a post removes its blobs; the account's blob soft delete (7 days) keeps them. After 7 days nothing can be restored. Azure portal, no script, no extra role (sign in to the storage account with the "Access key" authentication method, or give yourself a data role first):
+
+1. Storage account `fhstorageportfolio`, Containers, `blog-drafts`; turn on **Show deleted blobs**.
+2. Open `posts/<postId>/` (the id is in the studio URL `/posts/<postId>` and in the deleted `draft.json`), select the deleted blobs (`draft.json`, `draft.md`, `rev/...`), **Undelete**.
+3. If another post took the slug meanwhile, stop here: the post comes back as a never-published draft whose slug can be edited. If nobody took it, repeat the Undelete in `blog-published` for `posts/<postId>/` (needed only to publish an older version again; it locks the slug to this post).
+
+The restored post shows up in the studio list by itself, as a draft, once `draft.json` is back. It is not public until Publish is pressed. Undelete also restores each blob's soft-deleted snapshots (one per autosave) as active snapshots; they do no harm, are billed until the post is deleted again, and the store deletes them with the blob. These steps are unproven until the owner has run the drill after the delete button is deployed: a throwaway draft, a few autosaves, delete, restore as above, see it listed, delete it again.
 
 ## Limits
 
