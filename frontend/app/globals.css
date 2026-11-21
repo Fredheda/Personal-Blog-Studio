@@ -1,37 +1,111 @@
-:root {
-  --ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --ui-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+@import "tailwindcss";
+
+/* Tokens of the studio design (spec 7.1). `static` emits every variable, so
+   plain CSS can use var(--color-*) as well as the Tailwind utilities. */
+@theme static {
+  --color-*: initial;
+  --color-bg: #101217;
+  --color-deep: #0b0d11;
+  --color-pane: #181b22;
+  --color-raise: #20242d;
+  --color-line: #2a2f3b;
+  --color-text: #f1f3f7;
+  --color-ink: #dfe3ea;
+  --color-muted: #98a1b3;
+  --color-ok: #5fe3a1;
+  --color-ok-ink: #06281a;
+  --color-warn: #ffb454;
+  --color-err: #ff7b7b;
+  --color-primary: #ffffff;
+  --color-primary-ink: #101217;
+  --color-code-ink: #e6e9f0;
+  --color-code-keyword: #b9a8ff;
+  --color-code-function: #7fe0ff;
+  --color-code-number: #ffc46b;
+  --color-code-comment: #7c879a;
 }
 
-body {
-  font-family: var(--ui-font);
-  margin: 0;
-  padding: 2rem;
+@theme inline {
+  --font-sans: var(--ui-font);
+  --font-mono: var(--ui-mono);
 }
 
-code,
-pre {
-  font-family: var(--ui-mono);
+@layer base {
+  :root {
+    --ui-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --ui-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --iri: linear-gradient(100deg, #5ee7ff 0%, #8b7bff 42%, #ff7ad9 78%, #ffc46b 100%);
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--ui-font);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  code, pre { font-family: var(--ui-mono); }
+  label { display: block; margin: 0.75rem 0 0.25rem; font-weight: 600; }
+  input, textarea, button { font: inherit; color: inherit; }
+  input, textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+    background: var(--color-pane);
+    padding: 0.5rem 0.75rem;
+  }
+  button {
+    margin: 0.75rem 0.5rem 0 0;
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+    background: var(--color-raise);
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button[aria-pressed="true"] {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-primary-ink);
+    font-weight: 600;
+  }
+  hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.25rem 0; }
+  /* What Preflight strips and the pages still rely on: the page heading,
+     paragraph spacing and links (the top bar's no-underline still wins). */
+  h1 { margin: 0 0 1rem; font-size: 30px; line-height: 1.15; font-weight: 720; }
+  p { margin: 0.5rem 0; }
+  a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 }
 
-main { max-width: 52rem; margin: 0 auto; }
-label { display: block; margin: 0.75rem 0 0.25rem; font-weight: 600; }
-input, textarea, button { font: inherit; }
-input, textarea { width: 100%; box-sizing: border-box; padding: 0.4rem; }
-textarea { font-family: var(--ui-mono); min-height: 24rem; }
-button { margin: 0.75rem 0.5rem 0 0; padding: 0.4rem 0.9rem; }
-.posts { list-style: none; padding: 0; }
-.posts li { margin: 0.5rem 0; }
-.muted { color: #666; }
-.problem { border: 1px solid #b00020; padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
-.ok { border: 1px solid #1b7a2e; padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
-.crepe-host {
-  --crepe-font-title: var(--ui-font);
-  --crepe-font-default: var(--ui-font);
-  --crepe-font-code: var(--ui-mono);
-  border: 1px solid #ccc;
-  min-height: 24rem;
+@layer components {
+  main { max-width: 52rem; margin: 0 auto; padding: 2rem; }
+  .posts { list-style: none; padding: 0; }
+  .posts li { margin: 0.5rem 0; }
+  .muted, .status { color: var(--color-muted); }
+  .status { font-size: 0.9rem; }
+  .problem, .ok {
+    border: 1px solid var(--color-err);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--color-err) 12%, var(--color-pane));
+    padding: 0.5rem 0.75rem;
+    margin: 0.75rem 0;
+  }
+  .ok {
+    border-color: var(--color-ok);
+    background: color-mix(in srgb, var(--color-ok) 12%, var(--color-pane));
+  }
+  .problem ul { list-style: disc; padding-left: 1.4em; }
+  .crepe-host {
+    border: 1px solid var(--color-line);
+    border-radius: 12px;
+    min-height: 24rem;
+  }
+  .brand-dot { background: var(--iri); }
 }
+
 /* The maths editing popup's rules from Crepe's latex theme, minus its KaTeX
    stylesheet import (which would bundle KaTeX's fonts). */
 .milkdown span[data-type="math_inline"] {
@@ -72,5 +146,3 @@ button { margin: 0.75rem 0.5rem 0 0; padding: 0.4rem 0.9rem; }
 }
 .preview code { background: #f0f0f0; border-radius: 4px; padding: 0.1rem 0.3rem; }
 .preview pre code { background: none; padding: 0; }
-.tabs button[aria-pressed="true"] { font-weight: 700; }
-.status { color: #555; font-size: 0.9rem; }

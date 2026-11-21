@@ -72,6 +72,15 @@ test("typing in the editor autosaves the text through the real ETag flow", async
   await expect.poll(async () => (await stored(request, postId)).body).toContain("Hello from the browser");
 });
 
+test("the studio is dark and its page elements are restyled", async ({ page, request }) => {
+  const title = unique("Dark");
+  await createPost(request, { title });
+  await page.goto("/");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(16, 18, 23)");
+  await expect(page.getByRole("heading", { name: "Blog Studio", level: 1 })).toHaveCSS("font-size", "30px");
+  await expect(page.getByRole("link", { name: title, exact: true })).toHaveCSS("text-decoration-line", "underline");
+});
+
 test("the Preview shows a table with a grid and a boxed code block", async ({ page, request }) => {
   const body = "| a | b |\n| - | - |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n";
   const { postId } = await createPost(request, { title: unique("Table"), body });
