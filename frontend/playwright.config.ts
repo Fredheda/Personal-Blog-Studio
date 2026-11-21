@@ -21,7 +21,8 @@ export default defineConfig({
       name: "azurite",
       // The locked package's own bin (`npm run e2e:install` installs it).
       // In memory: nothing on disk, all data gone when the run ends.
-      command: "./e2e/azurite/node_modules/.bin/azurite --silent --inMemoryPersistence --skipApiVersionCheck",
+      command:
+        "./e2e/azurite/node_modules/.bin/azurite --silent --inMemoryPersistence --skipApiVersionCheck --blobHost 127.0.0.1 --queueHost 127.0.0.1 --tableHost 127.0.0.1",
       // 403 without credentials still means "listening".
       url: "http://127.0.0.1:10000/devstoreaccount1?comp=list",
       reuseExistingServer: false,
@@ -47,7 +48,7 @@ export default defineConfig({
     },
     {
       name: "web",
-      command: `${build}npm run start -- --port ${WEB_PORT} --hostname 127.0.0.1`,
+      command: `${build}npm run start -- --port ${WEB_PORT}`,
       url: `${WEB_ORIGIN}/healthz`,
       env: {
         STUDIO_API_URL: API_ORIGIN,

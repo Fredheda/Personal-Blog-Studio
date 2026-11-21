@@ -64,7 +64,7 @@ Limits: the registry is in legacy permission mode, so pushes cannot be scoped pe
 Start Azurite (local only) on its default ports, run the contract against it, stop it. Azurite is the locked package of the browser tests (`frontend/e2e/azurite/`; `cd frontend && npm run e2e:install` installs it from its lockfile): never a bare `npx`. `UseDevelopmentStorage=true` is the SDK's shorthand for Azurite's built-in development account, so no key is written down here (a spelled-out key trips the secret scan even though it is public).
 
 ```bash
-mkdir -p /tmp/azurite-blog && frontend/e2e/azurite/node_modules/.bin/azurite --silent --skipApiVersionCheck --location /tmp/azurite-blog &
+mkdir -p /tmp/azurite-blog && frontend/e2e/azurite/node_modules/.bin/azurite --silent --skipApiVersionCheck --blobHost 127.0.0.1 --queueHost 127.0.0.1 --tableHost 127.0.0.1 --location /tmp/azurite-blog &
 AZURITE_PID=$!
 cd backend
 export AZURITE_CONNECTION_STRING="UseDevelopmentStorage=true"
@@ -72,7 +72,7 @@ poetry run pytest tests/test_store_contract.py -q   # expect 25 passed, 1 skippe
 kill "$AZURITE_PID"
 ```
 
-CI runs Azurite only for the browser tests; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change.
+CI runs Azurite only for the browser tests; the in-memory fake is held to the same contract by running this locally when `blog_core/store.py`, `azure_store.py` or the fake change. A coding agent starts it as a harness background task and stops it as a task, never with `&` and a saved PID (workspace rule for local runs).
 
 ## Gotchas
 
