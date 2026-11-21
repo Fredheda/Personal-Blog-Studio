@@ -238,6 +238,20 @@ describe("limits and failures", () => {
   });
 });
 
+describe("token", () => {
+  test("with a token the request carries it", async () => {
+    const { calls, deps } = setup();
+    await proxy(req("GET", "/api/studio/posts"), ["posts"], deps);
+    expect(new Headers(calls[0].init.headers).get("authorization")).toBe("Bearer tok");
+  });
+
+  test("with no token (a local run) the request goes out without an Authorization header", async () => {
+    const { calls, deps } = setup();
+    await proxy(req("GET", "/api/studio/posts"), ["posts"], { ...deps, getToken: async () => null });
+    expect(new Headers(calls[0].init.headers).has("authorization")).toBe(false);
+  });
+});
+
 describe("cold start and diagnostics", () => {
   afterEach(() => vi.restoreAllMocks());
 

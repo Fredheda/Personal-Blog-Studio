@@ -4,11 +4,31 @@ Pure functions from ids to blob paths. Each checks its ids with
 `blog_core.ids`, so no caller can build a path outside the intended folder.
 """
 
+import os
+import re
+
 from blog_core import ids
 
-DRAFTS = "blog-drafts"
-PUBLISHED = "blog-published"
+DEFAULT_DRAFTS = "blog-drafts"
+DEFAULT_PUBLISHED = "blog-published"
 INDEX = "index.json"
+
+_CONTAINER = re.compile(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]")
+
+
+def _container(variable: str, default: str) -> str:
+    """The container named by an environment variable (the deployed apps set
+    both to the production names); empty or unset means the default."""
+    name = os.environ.get(variable) or default
+    if not _CONTAINER.fullmatch(name):
+        raise ValueError(f"{variable} is not a container name: {name!r}")
+    return name
+
+
+DRAFTS = _container("BLOG_DRAFTS_CONTAINER", DEFAULT_DRAFTS)
+PUBLISHED = _container("BLOG_PUBLISHED_CONTAINER", DEFAULT_PUBLISHED)
+if DRAFTS == PUBLISHED:
+    raise ValueError("the drafts and published containers must differ")
 
 
 def _post(post_id: str) -> str:

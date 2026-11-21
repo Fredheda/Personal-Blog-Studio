@@ -19,6 +19,9 @@ without touching it:
 - FAKE_IMAGE_<APP> (running image), FAKE_FAIL_UPDATE (app name), FAKE_PROVISIONING
   (comma list), FAKE_NO_TASK, FAKE_HAS_IDENTITIES / FAKE_HAS_CRED ("identity/cred"
   list), FAKE_OWNER_ID, FAKE_POLICY_NAMES: see the cases and FAKE_GH.
+- FAKE_ROLES: JSON array of role assignments (roleDefinitionName, scope) the
+  signed-in user already holds; FAKE_PUBLIC_ACCESS: public access level printed
+  by `storage container-rm show` (default None).
 
 For `az deployment group create` the fake copies the `--parameters @file` it
 was given (content and permissions) to `$FAKE_LOG.params` and `$FAKE_LOG.mode`
@@ -235,7 +238,17 @@ case "$*" in
     cred=$(echo "$*" | sed -E 's/.*--name ([^ ]+).*/\1/')
     mkdir -p "$FAKE_LOG.state"; touch "$FAKE_LOG.state/cred-$ident-$cred"
     exit 0 ;;
-  "role assignment create"*) exit 0 ;;
+  "role assignment create"*)
+    # Remembered, so a later `role assignment list` shows it (the read-back).
+    scope=$(echo "$*" | sed -E 's/.*--scope ([^ ]+).*/\1/')
+    jq -n -c --arg s "$scope" '{roleDefinitionName: "Storage Blob Data Contributor", scope: $s}' >> "$FAKE_LOG.roles"
+    exit 0 ;;
+  "role assignment list"*)
+    # FAKE_ROLES (JSON array) plus the assignments created so far.
+    jq -c -s 'add' <(echo "${FAKE_ROLES:-[]}") <(jq -s '.' "$FAKE_LOG.roles" 2>/dev/null || echo '[]')
+    exit 0 ;;
+  "storage container-rm create"*) exit 0 ;;
+  "storage container-rm show"*) echo "${FAKE_PUBLIC_ACCESS:-None}"; exit 0 ;;
 esac
 exit 0
 """
