@@ -39,7 +39,7 @@ extend-exclude = [".venv"]
 select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pyright]
-include = ["blog_core", "studio_api", "blog_api", "tests"]
+include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests"]
 pythonVersion = "3.13"
 typeCheckingMode = "basic"
 
