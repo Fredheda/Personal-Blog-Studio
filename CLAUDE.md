@@ -57,7 +57,7 @@ Python 3.13 with Poetry 2 (backend); Node 24 with npm 12.2.2 (frontend, Next.js 
 | Browser tests | `cd frontend && npm run e2e` (builds first; `E2E_SKIP_BUILD=1` reuses `.next`; ports 3200, 8200, 8201 and 10000 to 10002 must be free) |
 | All CI checks | `./scripts/ci-local.sh` (the gate before `gh pr ready`) |
 
-CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test`, `frontend-checks` and `frontend-e2e` (draft PRs skip it; advisory until it is added to the ruleset) on pull requests only; a push to `main` runs no CI, because the PR already ran it. Images are built on demand by the Deploy workflow, never by CI.
+CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint`, `frontend-test`, `frontend-checks` and `frontend-e2e` (draft PRs skip it and marking a PR ready runs it; advisory until it is added to the ruleset) on pull requests only; a push to `main` runs no CI, because the PR already ran it. Images are built on demand by the Deploy workflow, never by CI.
 
 ## Gotchas
 
