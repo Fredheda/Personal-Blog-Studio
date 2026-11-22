@@ -18,7 +18,7 @@ None.
 
 ## Architecture
 
-Source: `docs/plans/diagrams/2026-11-22-comment-content-rule.mmd` (green new, amber changed, grey unchanged).
+Source: `docs/plans/diagrams/2026-11-22-comment-content-rule.mmd` (green new, amber changed, grey unchanged). The inline copy below shows the rule's core only; the `.mmd` file is the full schematic (tests, lint settings, local run, legend).
 
 ```mermaid
 flowchart TB
@@ -81,6 +81,11 @@ def test_python_comments_carry_the_owner_words_of_a_docstring():
     assert (docstring.line, docstring.end) == (2, 2)
 
 
+def test_owner_words_split_camel_case_and_acronyms():
+    found = comment_python.comments('class HTTPError:\n    """HTTP error."""\n')
+    assert found[0].owner == {"http", "error"}
+
+
 def test_typescript_comments_mark_the_shebang_and_directives():
     found = comment_ts.comments(
         "#!/usr/bin/env node\n// eslint-disable-next-line x\n// a\n"
@@ -133,7 +138,8 @@ SCOPES = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
 
 
 def name_words(name: str) -> set[str]:
-    return {word.lower() for word in re.findall(r"[A-Za-z][a-z]*|[A-Z]+", name)}
+    found = re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", name)
+    return {word.lower() for word in found}
 
 
 def owner_words(node: ast.AST) -> frozenset[str] | None:
@@ -348,7 +354,7 @@ def test_a_header_of_four_comment_lines_fails_and_three_pass(tmp_path):
 
 
 def test_a_shebang_and_a_directive_do_not_count_toward_the_header(tmp_path):
-    text = "#!/usr/bin/env python3\n# a\n# b\n# c\nx = 1\n"
+    text = "#!/usr/bin/env python3\n# ruff: noqa: F401\n# a\n# b\n# c\nx = 1\n"
     assert content_output(tmp_path, {"src.py": text}).startswith("comment-content: ok")
 
 
@@ -574,9 +580,9 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4a:** in `scripts/rules/run.sh` replace `shared_block comment_count; do` with `shared_block comment_count comment_content; do`.
-- [ ] **Step 4b:** in `backend/tests/test_rules.py`, in `test_a_clean_change_passes_every_rule`, add the line `"comment-content: ok (1 file(s) read)",` after `"  src.py: 0 -> 0",` in the expected list.
-- [ ] **Step 4c:** in `backend/tests/test_comment_count.py` replace the body of `code_with_comments` with:
+- [ ] **Step 6:** in `scripts/rules/run.sh` replace `shared_block comment_count; do` with `shared_block comment_count comment_content; do`.
+- [ ] **Step 7:** in `backend/tests/test_rules.py`, in `test_a_clean_change_passes_every_rule`, add the line `"comment-content: ok (1 file(s) read)",` after `"  src.py: 0 -> 0",` in the expected list.
+- [ ] **Step 8:** in `backend/tests/test_comment_count.py` replace the body of `code_with_comments` with:
 
 ```python
     lines = [f"x{i} = {i}" for i in range(code)]
@@ -585,9 +591,9 @@ if __name__ == "__main__":
 ```
 
 (the comments must follow the first code line, or `comment-content` reads them as an over-long header).
-- [ ] **Step 5:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && rm -rf ../scripts/rules/__pycache__ && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py tests/test_comment_count.py tests/test_comment_tokens.py tests/test_rules.py -q`. Expected: all pass.
-- [ ] **Step 6:** mutation checks, each must turn at least one test red, then restore: (a) in `repeats_owner` change `<=` to `==`; (b) in `header_lines` remove `or number in skipped`; (c) change `HEADER_LIMIT = 3` to `4`; (d) in `problems` change `wanted = "disable" if comment.directive else "content"` to always `"content"`; (e) in `comment-content-patterns.txt` delete the `(?!\s*:)` from the first `disable python` row; (f) remove the `PROJECT_NAME` branch in `problems`.
-- [ ] **Step 7:** `git add scripts/rules backend/tests && git commit -m "Add the comment-content rule"`.
+- [ ] **Step 9:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && rm -rf ../scripts/rules/__pycache__ && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py tests/test_comment_count.py tests/test_comment_tokens.py tests/test_rules.py -q`. Expected: all pass.
+- [ ] **Step 10:** mutation checks, each must turn at least one test red, then restore: (a) in `repeats_owner` change `<=` to `==`; (b) in `header_lines` remove `or number in skipped`; (c) change `HEADER_LIMIT = 3` to `4`; (d) in `problems` change `wanted = "disable" if comment.directive else "content"` to always `"content"`; (e) in `comment-content-patterns.txt` delete the `(?!\s*:)` from the first `disable python` row; (f) remove the `PROJECT_NAME` branch in `problems`.
+- [ ] **Step 11:** `git add scripts/rules backend/tests && git commit -m "Add the comment-content rule"`.
 
 ### Task 3: Lint settings
 
