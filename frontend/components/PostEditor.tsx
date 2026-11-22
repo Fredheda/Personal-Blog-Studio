@@ -60,20 +60,18 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [publishing, setPublishing] = useState(false);
   const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [saves, setSaves] = useState(0); // every successful save and every reload: the check asks again
+  const [saves, setSaves] = useState(0);
   const [refusal, setRefusal] = useState<{ problems: CheckProblem[]; at: number } | null>(null);
   const [askUnpublish, setAskUnpublish] = useState(false);
   const [sheet, setSheet] = useState<"check" | "publish" | null>(null);
   const [jumpMiss, setJumpMiss] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  // The ETags live in refs: the save callback updates the body's before it
-  // resolves, so two saves in a row never send a stale one, and the check hook
-  // compares its answer with the current pair.
+  // The ETags live in refs so two saves in a row never send a stale one.
   const bodyEtag = useRef("");
   const metaEtag = useRef("");
   const autosave = useRef<ReturnType<typeof createAutosave> | null>(null);
-  const running = useRef(false); // saveAll() in progress: a second click sends nothing
+  const running = useRef(false);
   const editor = useRef<EditorHandle | null>(null);
   const pendingJump = useRef<{ line: number; markdown: string } | null>(null);
   const setEditor = useCallback((handle: EditorHandle | null) => {
@@ -132,14 +130,11 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     };
   }, [client, id, reloadKey]);
 
-  // Display only: keeps "Saved 2 min ago" current. Saving never runs on a timer.
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
 
-  // One body autosave per loaded post. Leaving flushes first and stops only
-  // after the flush settles, so text typed during a save is not lost.
   useEffect(() => {
     // `alive` goes false in the cleanup, before the closing flush runs: that
     // flush still sends the text, but its late answer must not touch the
@@ -155,7 +150,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         try {
           const next = await client.saveBody(id, text, bodyEtag.current);
           if (alive) {
-            bodyEtag.current = next.bodyEtag; // before this resolves
+            bodyEtag.current = next.bodyEtag;
             setSaved((previous) =>
               previous === null ? previous : { ...previous, body: text, bodyEtag: next.bodyEtag, updatedAt: next.updatedAt },
             );
@@ -163,7 +158,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
             setSaves((n) => n + 1);
           }
         } catch (e) {
-          if (alive) setBodyError(toApiError(e)); // the reason must reach the screen
+          if (alive) setBodyError(toApiError(e));
           throw e;
         }
       },
@@ -227,10 +222,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const checkView = checkStep(kind, checkState);
   const publishView = publishStep(saved, kind, checkState);
 
-  /** Saves everything that is unsaved: the details first (details ETag), then
-   *  the body (body ETag, through the autosave controller). True only when both
-   *  halves are saved. A details failure is shown, but the body is still
-   *  flushed so typed text is stored before the owner reloads. */
   async function saveAll(): Promise<boolean> {
     if (running.current) return false;
     running.current = true;
@@ -258,7 +249,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     return ok;
   }
 
-  /** The status fields (published, version, dates) of the post as the API has them now; never the text. */
   async function refreshStatus() {
     try {
       const fresh = await client.getPost(id);
@@ -368,7 +358,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
                   setBodyError(null);
                   setRefusal(null);
                   setStatus("idle");
-                  setSaved(null); // the editor remounts with the reloaded text
+                  setSaved(null);
                   setSaves((n) => n + 1);
                   setReloadKey((k) => k + 1);
                 }}
