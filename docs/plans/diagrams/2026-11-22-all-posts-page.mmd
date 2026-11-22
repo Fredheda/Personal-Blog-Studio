@@ -1,0 +1,59 @@
+flowchart TB
+  classDef new fill:#c8e6c9,stroke:#2e7d32,color:#000
+  classDef changed fill:#ffe0b2,stroke:#ef6c00,color:#000
+  classDef unchanged fill:#e0e0e0,stroke:#616161,color:#000
+
+  subgraph browser["Browser: All posts at /"]
+    page["app/page.tsx<br/>heading Posts"]:::changed
+    posts["Posts.tsx<br/>state: list, filter, text, new row, dialog, strip"]:::changed
+    filter["PostsFilter.tsx<br/>All n, Drafts n, Published n, Filter by title"]:::new
+    table["PostsTable.tsx<br/>Title and slug, Status, Last edited, actions"]:::new
+    pill["Pill.tsx"]:::unchanged
+    dialog["Dialog.tsx"]:::unchanged
+    strip["MessageStrip.tsx, ProblemList.tsx"]:::unchanged
+  end
+
+  subgraph lib["frontend/lib and effects"]
+    view["posts-view.ts<br/>countPosts, visiblePosts, editedLabel"]:::new
+    api["studio-api.ts<br/>ListItem.everPublished"]:::changed
+    req["effects/useRequest.ts (BLOG-61)"]:::unchanged
+  end
+
+  subgraph webapp["Web app"]
+    proxy["/api/studio proxy"]:::unchanged
+  end
+
+  subgraph backend["Studio API"]
+    route["GET /posts<br/>everPublished"]:::changed
+    service["PostService.list_drafts<br/>one listing of blog-published"]:::changed
+    del["DELETE /posts/{id}, POST /posts/{id}/unpublish"]:::unchanged
+  end
+
+  subgraph checks["Tests"]
+    unit["posts-view, Posts, PostsTable, PostsFilter unit tests"]:::changed
+    py["test_posts.py, test_post_routes.py"]:::changed
+    e2e["e2e/studio.spec.ts<br/>five list flows"]:::changed
+  end
+
+  page --> posts
+  posts --> filter
+  posts --> table
+  table --> pill
+  posts --> dialog
+  posts --> strip
+  posts --> view
+  posts --> req
+  posts --> api
+  api --> proxy
+  proxy --> route
+  proxy --> del
+  route --> service
+  unit --> posts
+  py --> service
+  e2e --> page
+
+  subgraph legend["Legend"]
+    l1["new"]:::new
+    l2["changed"]:::changed
+    l3["unchanged"]:::unchanged
+  end
