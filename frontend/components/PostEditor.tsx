@@ -24,6 +24,7 @@ import { Button } from "./Button";
 import { Dialog } from "./Dialog";
 import { MessageStrip } from "./MessageStrip";
 import type { EditorHandle } from "./CrepeEditor";
+import { PostDetails } from "./PostDetails";
 import { Preview } from "./Preview";
 import { ProblemList } from "./ProblemList";
 import { Sheet } from "./Sheet";
@@ -41,10 +42,6 @@ const REFUSED = "Not published: fix the problems listed under Check.";
 
 const toApiError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(0, null));
 
-function splitTags(text: string): string[] {
-  return text.split(",").map((t) => t.trim()).filter((t) => t !== "");
-}
-
 export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const client = useMemo(() => api ?? createStudioApi(), [api]);
   const slot = useTopBarSlot();
@@ -52,7 +49,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [summary, setSummary] = useState("");
-  const [tags, setTags] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [body, setBody] = useState("");
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [status, setStatus] = useState<AutosaveStatus>("idle");
@@ -92,7 +89,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setTitle(draft.title);
     setSlug(draft.slug);
     setSummary(draft.summary);
-    setTags(draft.tags.join(", "));
+    setTags(draft.tags);
     setBody(draft.body);
     bodyEtag.current = draft.bodyEtag;
     metaEtag.current = draft.metaEtag;
@@ -121,7 +118,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setTitle(draft.title);
     setSlug(draft.slug);
     setSummary(draft.summary);
-    setTags(draft.tags.join(", "));
+    setTags(draft.tags);
   }
 
   useEffect(() => {
@@ -189,7 +186,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const detailsUnsaved =
     saved !== null &&
     (title !== saved.title || slug !== saved.slug || summary !== saved.summary ||
-      splitTags(tags).join(",") !== saved.tags.join(","));
+      tags.join(",") !== saved.tags.join(","));
 
   useEffect(() => {
     const unsaved =
@@ -243,7 +240,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     try {
       if (metaDirty) {
         try {
-          const next = await client.patchMeta(id, { title, slug, summary, tags: splitTags(tags) }, saved!.metaEtag);
+          const next = await client.patchMeta(id, { title, slug, summary, tags }, saved!.metaEtag);
           adoptDetails(next);
           setError(null);
           setSaves((n) => n + 1);
@@ -389,16 +386,18 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         {notice && <MessageStrip kind="success">{notice}</MessageStrip>}
         {jumpMiss !== null && <MessageStrip kind="error">Could not find line {jumpMiss} in the editor.</MessageStrip>}
 
-        <h1>{saved.title || "(untitled)"}</h1>
-
-        <label htmlFor="title">Title</label>
-        <input id="title" value={title} maxLength={200} onChange={(e) => { setTitle(e.target.value); edited(); }} />
-        <label htmlFor="slug">Slug</label>
-        <input id="slug" value={slug} onChange={(e) => { setSlug(e.target.value); edited(); }} />
-        <label htmlFor="summary">Summary</label>
-        <textarea id="summary" style={{ minHeight: "4rem" }} value={summary} maxLength={500} onChange={(e) => { setSummary(e.target.value); edited(); }} />
-        <label htmlFor="tags">Tags (comma separated, optional)</label>
-        <input id="tags" value={tags} onChange={(e) => { setTags(e.target.value); edited(); }} />
+        <PostDetails
+          title={title}
+          summary={summary}
+          slug={slug}
+          tags={tags}
+          slugLocked={saved.slugLocked}
+          preview={view === "preview"}
+          onTitle={(value) => { setTitle(value); edited(); }}
+          onSummary={(value) => { setSummary(value); edited(); }}
+          onSlug={(value) => { setSlug(value); edited(); }}
+          onTags={(value) => { setTags(value); edited(); }}
+        />
 
         <div className="mt-4" hidden={view !== "edit"}>
           <CrepeEditor

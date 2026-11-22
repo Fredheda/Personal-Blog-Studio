@@ -45,6 +45,18 @@ vi.mock("./CrepeEditor", () => ({
   },
 }));
 
+async function typeSlug(value: string) {
+  fireEvent.click(await screen.findByRole("button", { name: /^(\/.+|Add a slug)$/ }));
+  fireEvent.change(screen.getByLabelText("Slug"), { target: { value } });
+}
+
+async function typeTags(text: string) {
+  fireEvent.click(await screen.findByRole("button", { name: "Add a tag" }));
+  const input = screen.getByLabelText("Tags");
+  fireEvent.change(input, { target: { value: text } });
+  fireEvent.keyDown(input, { key: "Enter" });
+}
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -120,8 +132,8 @@ const publishButton = () => screen.getByRole("button", { name: "Publish" }) as H
 test("loads the post into the form and the editor", async () => {
   render(<PostEditor id={draft.postId} api={fakeApi()} />);
   expect(((await screen.findByLabelText("Title")) as HTMLInputElement).value).toBe("Hello");
-  expect((screen.getByLabelText("Slug") as HTMLInputElement).value).toBe("hello");
-  expect((screen.getByLabelText("Tags (comma separated, optional)") as HTMLInputElement).value).toBe("maths");
+  expect(screen.getByRole("button", { name: "/hello" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Remove tag maths" })).toBeTruthy();
   expect((await screen.findByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("# Hi");
 });
 
@@ -217,7 +229,7 @@ test("Save with only the details changed calls patchMeta and no saveBody", async
   const patchMeta = vi.fn(async () => ({ ...draft, slug: "hello-2", metaEtag: '"m2"' }));
   const saveBody = vi.fn();
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, saveBody })} />);
-  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello-2" } });
+  await typeSlug("hello-2");
   fireEvent.click(saveButton());
   await waitFor(() => expect(patchMeta).toHaveBeenCalledTimes(1));
   expect(patchMeta).toHaveBeenCalledWith(draft.postId, { title: "Hello", slug: "hello-2", summary: "Sum", tags: ["maths"] }, '"m1"');
@@ -245,20 +257,20 @@ test("Save with both changed sends the details first, each with its own ETag, no
     return { ...draft, body: args[1], bodyEtag: '"b2"' };
   });
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, saveBody })} />);
-  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello-2" } });
+  await typeSlug("hello-2");
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "# New" } });
   fireEvent.click(saveButton());
   await waitFor(() => expect(saveBody).toHaveBeenCalled());
   expect(calls).toEqual(['details "m1"', 'body "b1"']);
 });
 
-test("tags typed as 'a, b' are sent as two tags", async () => {
-  const patchMeta = vi.fn(async () => ({ ...draft, tags: ["a", "b"], metaEtag: '"m2"' }));
+test("tags typed as 'a, b' are added to the existing tag and sent", async () => {
+  const patchMeta = vi.fn(async () => ({ ...draft, tags: ["maths", "a", "b"], metaEtag: '"m2"' }));
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta })} />);
-  fireEvent.change(await screen.findByLabelText("Tags (comma separated, optional)"), { target: { value: "a, b" } });
+  await typeTags("a, b");
   fireEvent.click(saveButton());
   await waitFor(() =>
-    expect(patchMeta).toHaveBeenCalledWith(draft.postId, { title: "Hello", slug: "hello", summary: "Sum", tags: ["a", "b"] }, '"m1"'),
+    expect(patchMeta).toHaveBeenCalledWith(draft.postId, { title: "Hello", slug: "hello", summary: "Sum", tags: ["maths", "a", "b"] }, '"m1"'),
   );
 });
 
@@ -268,7 +280,7 @@ test("a body 412 after the details saved in the same Save shows the banner and k
     throw problem(412, "Precondition Failed");
   });
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, saveBody })} />);
-  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello-2" } });
+  await typeSlug("hello-2");
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "typed text" } });
   fireEvent.click(saveButton());
   expect((await screen.findByRole("alert")).textContent).toMatch(/changed elsewhere/i);
@@ -321,7 +333,7 @@ test("a details 412 shows the banner, answers not saved, and the typed body is s
   });
   const saveBody = vi.fn(async (...args: [string, string, string]) => ({ ...draft, body: args[1], bodyEtag: '"b2"' }));
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, saveBody })} />);
-  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello-2" } });
+  await typeSlug("hello-2");
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "typed text" } });
   fireEvent.click(saveButton());
   expect((await screen.findByRole("alert")).textContent).toMatch(/changed elsewhere/i);
@@ -336,7 +348,7 @@ test("a second click during a save sends nothing more", async () => {
     return { ...draft, slug: "hello-2", metaEtag: '"m2"' };
   });
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta })} />);
-  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello-2" } });
+  await typeSlug("hello-2");
   fireEvent.click(saveButton());
   await waitFor(() => expect(patchMeta).toHaveBeenCalledTimes(1));
   expect(saveButton().disabled).toBe(true);
@@ -363,7 +375,7 @@ test("tags are optional: clearing the box saves an empty list, and a post withou
   const patchMeta = vi.fn(async () => ({ ...draft, tags: [], metaEtag: '"m2"' }));
   const publish = vi.fn(async () => ({ postId: draft.postId, slug: "hello", version: 1, publishedAt: "t", updatedAt: "t" }));
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, publish })} />);
-  fireEvent.change(await screen.findByLabelText("Tags (comma separated, optional)"), { target: { value: "" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Remove tag maths" }));
   fireEvent.click(saveButton());
   await waitFor(() =>
     expect(patchMeta).toHaveBeenCalledWith(draft.postId, { title: "Hello", slug: "hello", summary: "Sum", tags: [] }, '"m1"'),
@@ -395,7 +407,7 @@ test("Publish stays disabled with unsaved details, and after a failed Save of ei
     throw problem(422, "Unprocessable Content", "slug is not valid");
   });
   const { unmount } = render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta: failingDetails, publish })} />);
-  fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "Bad Slug" } });
+  await typeSlug("Bad Slug");
   expect(publishButton().disabled).toBe(true);
   fireEvent.click(saveButton());
   await screen.findByText(/slug is not valid/);
