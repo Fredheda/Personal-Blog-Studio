@@ -65,6 +65,35 @@ jobs:
       - run: poetry run ruff format --check .
       - run: poetry run pyright
 
+  # The storage contract (backend/tests/test_store_contract.py) against real blob
+  # semantics on Azurite: conditional writes, 409 and 412. No Azure, no secrets.
+  storage-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Not a service container: those take no command, and Azurite needs
+      # --skipApiVersionCheck for the newer SDK. Started first, ready by pytest.
+      - name: Start Azurite
+        run: |
+          docker run -d --rm -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5 \
+            azurite-blob --blobHost 0.0.0.0 --inMemoryPersistence --skipApiVersionCheck
+      - name: Install Poetry
+        run: pipx install poetry==2.5.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: backend/.python-version
+          cache: poetry
+          cache-dependency-path: backend/poetry.lock
+      - run: poetry install --no-interaction
+      - run: timeout 30 sh -c 'until curl -s -o /dev/null http://127.0.0.1:10000; do sleep 1; done'
+      - run: poetry run pytest -v tests/test_store_contract.py
+        env:
+          AZURITE_CONNECTION_STRING: UseDevelopmentStorage=true
+
   frontend-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

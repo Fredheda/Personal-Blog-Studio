@@ -30,6 +30,14 @@ step "backend-test"
 step "backend-lint"
 (cd backend && poetry run ruff check . && poetry run ruff format --check . && poetry run pyright)
 
+step "storage-contract"
+docker run -d --rm --name blog-ci-azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5 \
+  azurite-blob --blobHost 0.0.0.0 --inMemoryPersistence --skipApiVersionCheck >/dev/null
+trap 'docker stop blog-ci-azurite >/dev/null 2>&1 || true' EXIT
+timeout 30 sh -c 'until curl -s -o /dev/null http://127.0.0.1:10000; do sleep 1; done'
+(cd backend && AZURITE_CONNECTION_STRING=UseDevelopmentStorage=true poetry run pytest -v tests/test_store_contract.py)
+docker stop blog-ci-azurite >/dev/null
+
 step "frontend-test"
 (cd frontend && npm test)
 
