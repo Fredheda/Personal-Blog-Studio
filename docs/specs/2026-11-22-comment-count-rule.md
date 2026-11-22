@@ -1,7 +1,7 @@
 # The `comment-count` rule
 
 - **Ticket:** BLOG-60 (phase B3 of the multi-agent SDLC; owner decision 572: "have some flexibility for discretion ... overall comment count should be reduced significantly"). Design source: the workspace spec `docs/shared/specs/2026-11-22-multi-agent-sdlc.md`, section 3.
-- **Status:** proposed. Plan: `docs/plans/2026-11-22-comment-count-rule.md`. Extends the `rules` job of BLOG-59 (merged, PR #69).
+- **Status:** done (PR #n). Plan: `docs/plans/2026-11-22-comment-count-rule.md`. Extends the `rules` job of BLOG-59 (merged, PR #69).
 
 ## Intent
 
@@ -11,14 +11,14 @@ The shared rules say comments are rare and cut when a file is edited. Prose does
 
 - Rule `comment-count` runs in `scripts/rules/run.sh` after the other three rules, in CI job `rules` and in `scripts/ci-local.sh`.
 - For every changed countable file, the comment lines after the PR must not exceed the count at the merge-base. A new file starts at zero. A renamed file is compared with its old path.
-- A line `Comments: <path>: <reason>` in the PR description lifts the failure for the file `<path>` only; a grown file passes only when its own path is named, and the reason has at least one non-blank character.
+- Floor (owner decision 605 A): a changed countable file may hold at most one comment line per 40 code lines, and at least 2 are always allowed. Code lines are the non-blank lines that are not comment lines. A file above its allowance fails even when it shrank. The floor is its own small function (`over_floor`), next to the growth check (`growth`).
+- A line `Comments: <path>: <reason>` in the PR description lifts the failure, growth or floor, for the file `<path>` only; a flagged file passes only when its own path is named, and the reason has at least one non-blank character.
 - The CI job summary shows, per changed file and in total, the lines before, after and the change in percent, so the working standard (at least 70 percent fewer comment lines in touched files) is visible in every PR.
 - Every behaviour has a violating test input written and run red before the code.
 
 ## Non-goals and anti-goals
 
 - No cleanup of existing comments: that is the audit tickets (A*). This PR only stops growth and shows the change.
-- No floor yet (a cap of comment lines per code lines, a one-time drop with a baseline file, or none): it is an open owner question. The growth check is its own small function, so a floor is one function to add later.
 - No new dependency: Python standard library and `git`; the description is read with the `gh` CLI that CI runners carry.
 - The rule is never loosened to pass: the only escape is the per-file `Comments:` line.
 
@@ -40,9 +40,9 @@ Not read: files in a directory named `fixtures` (as `pr-size`), the files listed
 
 | Input | Fails when |
 |---|---|
-| `git diff --name-status -M <merge-base> HEAD`, then the file text at the merge-base and at `HEAD` | a countable file has more comment lines after than before and the description has no `Comments: <path>: <reason>` line for it; or a countable code file cannot be read |
+| `git diff --name-status -M <merge-base> HEAD`, then the file text at the merge-base and at `HEAD` | a countable file has more comment lines after than before, or more than its allowance, and the description has no `Comments: <path>: <reason>` line for it; or a countable code file cannot be read |
 
-Output: one verdict line (`comment-count: ok (<before> -> <after>)`, `comment-count: ok (<n> file(s) with a reason)` or `comment-count: FAIL ...`), then one indented line per file `  path: before -> after`, with `(reason given)` after a file a line lifted. The reason text is never printed: the description is untrusted text. When `GITHUB_STEP_SUMMARY` is set, a Markdown table (file, before, after, change in percent, and a total row) is appended to it; a file that starts with no comments and gains some shows `new`.
+Output: one verdict line (`comment-count: ok (<before> -> <after>)`, `comment-count: ok (<n> file(s) with a reason)` or `comment-count: FAIL ...`), then one indented line per file `  path: before -> after`, with `(reason given)` after a file a line lifted. The reason text is never printed: the description is untrusted text. When `GITHUB_STEP_SUMMARY` is set, a Markdown table (file, before, after, change in percent, allowance, and a total row) is appended to it; a file that starts with no comments and gains some shows `new`.
 
 ## Where the reasons come from
 

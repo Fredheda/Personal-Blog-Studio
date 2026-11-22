@@ -2,7 +2,7 @@
 
 > **For agentic workers:** use `superpowers:executing-plans` (inline). Steps use checkbox syntax; flip each box when the step is done.
 
-**Status:** proposed. Spec: `docs/specs/2026-11-22-comment-count-rule.md`. Ticket: BLOG-60. Extends `scripts/rules/` and the `rules` job from BLOG-59 (merged, PR #69). The rules run with the repo's Python (`backend/.python-version`, set in the job): use only standard-library features present in Python 3.12 and 3.13.
+**Status:** done (PR #n); the floor of owner decision 605 A joined the rule during execution (see the spec). Spec: `docs/specs/2026-11-22-comment-count-rule.md`. Ticket: BLOG-60. Extends `scripts/rules/` and the `rules` job from BLOG-59 (merged, PR #69). The rules run with the repo's Python (`backend/.python-version`, set in the job): use only standard-library features present in Python 3.12 and 3.13.
 
 ## TL;DR
 
