@@ -6,7 +6,7 @@
 
 ## TL;DR
 
-- Ships one PR: seven small hooks in `frontend/effects/` with tests, the six use sites moved onto them, an ESLint rule that rejects every effect hook outside that folder, a guard against switching the rule off, and the cheat sheet in `docs/development.md`.
+- Ships one PR: seven small hooks in `frontend/effects/` with tests, the eleven uses in six files moved onto them, an ESLint rule that rejects every effect hook outside that folder, a guard against switching the rule off, and the cheat sheet in `docs/development.md`.
 - Behaviour is unchanged, the editor autosave life cycle included. Proof: the 314 existing frontend tests and the 19 browser tests stay green on the migrated code; the prototype of this plan passed both (337 frontend tests with the new ones, 19 browser tests, lint, types, build).
 - No new dependency, no workflow change, no new Azure resource. The PR touches no `.github` file and changes behaviour-free code, but it is a feature-class PR: the owner gets the local-run-or-merge choice.
 - Cost: none.
@@ -37,7 +37,7 @@ flowchart TB
 
 ## Global constraints
 
-- Edit files only with Edit and Write. No comment in any new file.
+- Edit files only with Edit and Write. No comment in any new file (the `// @vitest-environment node` directive line of a test file is not a comment).
 - Commit messages: two lines at most, no trailer. Branch from `main`.
 - Run frontend commands from `frontend/` (`npx vitest run ...`, `npm run lint`, `npx tsc --noEmit`), backend commands from `backend/`.
 - Comment standard for the touched files: separate cleanup commit; the floor allows one comment line per 40 code lines (at least 2) and `PostEditor.tsx`, `CrepeEditor.tsx` and `use-check.ts` are above it today; what stays is listed as `Comments: <path>: <reason>` in the PR description.
@@ -545,6 +545,7 @@ and replace the tail (`return () => { ... };` of the old effect, the two comment
     );
 ```
 
+(The stand-in now mounts once, like the real editor; it no longer re-runs when `onReady` changes.)
 - [ ] **Step 7:** `cd frontend && npx tsc --noEmit && npx vitest run`. Expected: no type errors; every test passes (the 314 old ones and the 10 new ones).
 - [ ] **Step 8:** `grep -rnE "useEffect|useLayoutEffect|useInsertionEffect" frontend --include='*.ts' --include='*.tsx' --exclude-dir=node_modules --exclude-dir=.next -l`. Expected: only files under `frontend/effects/` (and `effects.test.tsx` names them in no import).
 - [ ] **Step 9:** `git add frontend && git commit -m "Move the effect uses into the named hooks"`.
@@ -667,7 +668,7 @@ disable	ts	eslint-disable.*\bno-restricted-(imports|syntax)\b	switches off the r
 disable	ts	eslint\s+[^*]*\bno-restricted-(imports|syntax)\b	changes the rule on effect hooks: delete it
 ```
 
-- [ ] **Step 4:** rerun the Step 2 command. Expected: all pass. Mutation: remove the `\b` after the group in the first new row; the first new test must stay green only if the pattern still matches, so instead delete the first new row and confirm the first two new tests go red; restore.
+- [ ] **Step 4:** rerun the Step 2 command. Expected: all pass. Mutation: delete the first new row, confirm the first two new parameter cases go red, restore it.
 - [ ] **Step 5:** `git add scripts/rules backend/tests && git commit -m "Fail a directive that switches off the effect rule"`.
 
 ### Task 5: Docs
@@ -708,6 +709,6 @@ Components do not call `useEffect`, `useLayoutEffect` or `useInsertionEffect`: E
 - [ ] **Step 1:** `cd frontend && npm run lint && npx tsc --noEmit && npx vitest run && npm run build`. Expected: all green. Then `npm run e2e:install` (once) and `E2E_SKIP_BUILD=1 npm run e2e` (ports 3200, 8200, 8201 and 10000 to 10002 free, `poetry install` done in `backend/`). Expected: `19 passed`; no server left listening (`lsof -nP -iTCP:3200 -sTCP:LISTEN` prints nothing).
 - [ ] **Step 2:** cleanup commit under the comment standard: in `PostEditor.tsx`, `CrepeEditor.tsx` and `use-check.ts` delete every comment that restates the code or narrates a change; keep at most one line per real constraint within the floor (one line per 40 code lines, at least 2); in `CrepeEditor.tsx` the note about the theme's `latex.css` import is such a constraint; separate commit "Delete comments that restate the code in the touched files"; list what stays as `Comments: <path>: <reason>` lines in the PR description.
 - [ ] **Step 3:** run `auditing-branch-changes` (subagent) before `gh pr create`; fix findings.
-- [ ] **Step 4:** `git fetch && git merge origin/main`, push, `gh pr create --draft` (body: the before and after list of the ten uses, what was run, the `Comments:` lines), set `Status: done (PR #n)` in the spec and this plan, push.
+- [ ] **Step 4:** `git fetch && git merge origin/main`, push, `gh pr create --draft` (body: the before and after list of the eleven uses, what was run, the `Comments:` lines), set `Status: done (PR #n)` in the spec and this plan, push.
 - [ ] **Step 5:** wait with the bare `gh pr checks <n> -R Fredheda/Personal-Blog-Studio --watch --interval 60 --fail-fast` (or `gh run watch <id> ... --interval 60`) as a background task; when the draft's CI finished, `gh pr ready`, wait again, confirm every job ran, read the review `Verdict:` once, hand the URL to the coordinator. This PR changes code paths of the editor: the owner gets the local-run-or-merge choice.
 - [ ] **Step 6:** after merge: remove the worktree (no `--force`), delete the branch, check the remote branch is gone, `git pull --ff-only` in the main checkout, BLOG-61 to Done with what shipped.

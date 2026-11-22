@@ -42,7 +42,9 @@ flowchart TB
   check --> request
   check --> latest
   controller --> autosave
-  request --> api
+  editor --> api
+  posts --> api
+  check --> api
   request --> latest
   listener --> latest
   interval --> latest

@@ -33,7 +33,7 @@ Most effects in a component either compute something that can be derived, or rea
 | `useWidget(mount)` | a third-party widget created on a DOM node in an effect | returns a ref callback; `mount(root)` returns its cleanup; read once at attach |
 | `useFocusReturn(target)` | focus on mount and return on unmount | focuses `target` when it mounts and gives the focus back to the element that had it |
 
-## The ten uses today
+## The eleven uses today
 
 | Place | Before | After |
 |---|---|---|
