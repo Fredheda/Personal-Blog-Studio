@@ -2,7 +2,7 @@
 
 > **For agentic workers:** use `superpowers:executing-plans` (inline). Steps use checkbox syntax; flip each box when the step is done.
 
-**Status:** proposed. Spec: `docs/specs/2026-11-22-comment-count-rule.md`. Ticket: BLOG-60. Needs BLOG-59 (PR #69) merged: this plan extends `scripts/rules/` and the `rules` job.
+**Status:** proposed. Spec: `docs/specs/2026-11-22-comment-count-rule.md`. Ticket: BLOG-60. Extends `scripts/rules/` and the `rules` job from BLOG-59 (merged, PR #69). The rules run with the runner's `python3`: use only standard-library features present in Python 3.12 and 3.13.
 
 ## TL;DR
 
@@ -10,7 +10,7 @@
 - A PR may not raise any changed code file's comment lines; a `Comments: <reason>` line in the PR description lifts it. The job summary shows before and after per file and in total.
 - No new dependency and no new Azure resource. Owner action: merge (the PR touches `.github/workflows/ci.yml`).
 - Cost: none (no paid API, no new resource; the job adds seconds to the existing `rules` job).
-- Prototype of every code block below ran green before this plan was written: 32 tokenizer tests, 18 rule tests, ruff clean, and the tokenizers read all 153 code files of this repo without error.
+- Prototype of every code block below ran green before this plan was written: 35 tokenizer tests, 18 rule tests, ruff clean, and the tokenizers read all 153 code files of this repo without error.
 
 ## Cost estimate
 
@@ -18,7 +18,7 @@ None. Python standard library, `git` and the `gh` CLI already present on the run
 
 ## Architecture
 
-Source: `docs/plans/diagrams/2026-11-22-comment-count-rule.mmd` (green new, amber changed, grey unchanged).
+Source: `docs/plans/diagrams/2026-11-22-comment-count-rule.mmd` (green new, amber changed, grey unchanged). The inline copy below is the rule's core only; the `.mmd` file is the full schematic (job, tests, git history, summary, legend).
 
 ```mermaid
 flowchart TB
@@ -56,7 +56,7 @@ flowchart TB
 
 ### Task 0: Worktree and baseline
 
-- [ ] **Step 1:** after #69 merged, from the repo's main checkout: `git -C Personal-Blog-Studio fetch origin && git -C Personal-Blog-Studio worktree add ../.worktrees/Personal-Blog-Studio-commentcount -b feat/comment-count-rule origin/main`.
+- [ ] **Step 1:** from the repo's main checkout, after the docs PR merged and `git pull --ff-only`: `git -C Personal-Blog-Studio fetch origin && git -C Personal-Blog-Studio worktree add ../.worktrees/Personal-Blog-Studio-commentcount -b feat/comment-count-rule origin/main`.
 - [ ] **Step 2:** `cd .worktrees/Personal-Blog-Studio-commentcount/backend && poetry install && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`. Expected: all pass (about 624 passed, 14 skipped).
 - [ ] **Step 3:** comment BLOG-60 "Starting code PR" and keep the ticket `In Progress`.
 
@@ -144,7 +144,7 @@ def run_rules(repo: Path, **extra_env: str) -> subprocess.CompletedProcess:
 import pr_size
 import shared_block
 import spec_location
-from rules_support import (
+from tests.rules_support import (
     FIXTURES,
     GOOD,
     RECORDED,
@@ -272,7 +272,7 @@ def count(source: str) -> int:
 ```
 
 - [ ] **Step 6:** run the Step 2 command. Expected: `13 passed`.
-- [ ] **Step 7:** mutation check: in `comment_python.py` delete the `not` in front of `directives.is_directive`; the run must fail (directive cases); restore. Replace `clean=False` by nothing and add `or True`-free variant is not needed.
+- [ ] **Step 7:** mutation check: in `comment_python.py` delete the `not` in front of `directives.is_directive`; the run must fail (directive cases); restore.
 - [ ] **Step 8:** `git add scripts/rules backend/tests && git commit -m "Count Python comments and docstrings"`.
 
 ### Task 3: The TypeScript and JavaScript tokenizer
@@ -297,6 +297,9 @@ def count(source: str) -> int:
         ("function f(s) { return /x/.test(s); } // c\n", 1),
         ("const q = (a) / 2; // c\n", 1),
         ("const p = <p>Don't // no</p>;\n// real\n", 1),
+        ("const a = <a>x</a>; // c\n", 1),
+        ("const a = <a>x</a>{/* c */};\n", 1),
+        ("const a = <b>{/* c */}</b>;\nconst d = <i/>; // d\n", 2),
         ("// eslint-disable-next-line no-console\n", 0),
         ("/* istanbul ignore next */\n", 0),
         ("// @ts-expect-error reason\n", 0),
@@ -331,7 +334,7 @@ REGEX_KEYWORDS = {
     "do",
     "new",
 }
-DIVISION_BEFORE = set(")]}\"'`")
+DIVISION_BEFORE = set(")]}\"'`<")
 
 
 def is_word_char(char: str) -> bool:
@@ -460,8 +463,8 @@ def count(source: str) -> int:
     return len(lines)
 ```
 
-- [ ] **Step 4:** run the Step 2 command. Expected: `32 passed`.
-- [ ] **Step 5:** mutation checks, each must turn at least one test red, then restore: (a) in `skip_quoted` replace `source[i] != "\n"` by `True` (the JSX apostrophe case hangs or fails); (b) in the `//` branch remove the `record` call (every line-comment case fails); (c) change `"return"` out of `REGEX_KEYWORDS` (the `return /x/` case fails).
+- [ ] **Step 4:** run the Step 2 command. Expected: `35 passed`.
+- [ ] **Step 5:** mutation checks, each must turn at least one test red, then restore: (a) in `skip_quoted` replace `source[i] != "\n"` by `True` (the JSX apostrophe case hangs or fails); (b) in the `//` branch remove the `record` call (every line-comment case fails); (c) remove `"return"` from `REGEX_KEYWORDS` (the `return /x/` case fails); (d) remove `<` from `DIVISION_BEFORE` (the JSX closing-tag cases fail).
 - [ ] **Step 6:** `git add scripts/rules backend/tests && git commit -m "Count TypeScript and JavaScript comments"`.
 
 ### Task 4: The rule
@@ -475,7 +478,7 @@ from pathlib import Path
 
 import comment_count
 import pytest
-from rules_support import commit_all, make_repo, run_rules
+from tests.rules_support import commit_all, make_repo, run_rules
 
 
 def write(repo: Path, path: str, text: str) -> None:
@@ -748,7 +751,7 @@ if __name__ == "__main__":
     ]
 ```
 
-- [ ] **Step 6:** `cd backend && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_count.py tests/test_rules.py tests/test_comment_tokens.py -q`. Expected: all pass (`18 + 28 + 32`).
+- [ ] **Step 6:** `cd backend && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_count.py tests/test_rules.py tests/test_comment_tokens.py -q`. Expected: all pass (`18 + 28 + 35`).
 - [ ] **Step 7:** mutation checks, each must turn a test red, then restore: (a) `c[2] > c[1]` to `c[2] >= c[1]` (the rename and fewer-comments tests); (b) `else 0` path: replace `if old_path else 0` by `if old_path else 5` (new-file test); (c) remove `and not unreadable`-equivalent by making the `elif grown and escape` branch come before `if unreadable` (unreadable test); (d) change `\S.*` in `REASON` to `.*` (blank-reason test).
 - [ ] **Step 8:** `git add scripts/rules backend/tests && git commit -m "Add the comment-count rule"`.
 
