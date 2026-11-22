@@ -1,0 +1,55 @@
+flowchart TB
+  classDef new fill:#c8e6c9,stroke:#2e7d32,color:#000
+  classDef changed fill:#ffe0b2,stroke:#ef6c00,color:#000
+  classDef unchanged fill:#e0e0e0,stroke:#616161,color:#000
+
+  subgraph local["Developer or agent machine"]
+    cilocal["scripts/ci-local.sh"]:::unchanged
+    editor["Editor: Ruff and ESLint findings"]:::unchanged
+  end
+
+  subgraph github["GitHub: CI job rules"]
+    run["scripts/rules/run.sh"]:::changed
+    count["comment_count.py"]:::changed
+    content["comment_content.py"]:::new
+    data["comment-content-patterns.txt<br/>comment-projects.txt"]:::new
+    model["comment_model.py"]:::new
+    py["comment_python.py"]:::changed
+    ts["comment_ts.py"]:::changed
+    hs["comment_hash.py"]:::changed
+  end
+
+  subgraph settings["Lint settings (configuration only)"]
+    ruff["backend/pyproject.toml<br/>ERA001, FIX001 to FIX004"]:::changed
+    eslint["frontend/eslint.config.mjs<br/>no-warning-comments"]:::changed
+  end
+
+  subgraph tests["Tests"]
+    tcontent["test_comment_content.py"]:::new
+    tlint["test_lint_settings.py<br/>lint-settings.test.ts"]:::new
+    ttok["test_comment_tokens.py"]:::changed
+  end
+
+  cilocal --> run
+  run --> count
+  run --> content
+  content --> data
+  content --> count
+  count --> py
+  count --> ts
+  count --> hs
+  py --> model
+  ts --> model
+  hs --> model
+  ruff --> editor
+  eslint --> editor
+  tcontent --> content
+  tlint --> ruff
+  tlint --> eslint
+  ttok --> model
+
+  subgraph legend["Legend"]
+    l1["new"]:::new
+    l2["changed"]:::changed
+    l3["unchanged"]:::unchanged
+  end
