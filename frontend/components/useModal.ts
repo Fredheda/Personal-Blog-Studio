@@ -1,13 +1,10 @@
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import { useRef, type KeyboardEvent, type RefObject } from "react";
+
+import { useFocusReturn } from "../effects/useFocusReturn";
 
 export function useModal(onCancel: () => void, first: RefObject<HTMLElement | null>) {
   const panel = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    first.current?.focus();
-    return () => before?.focus();
-  }, [first]);
+  useFocusReturn(first);
 
   function onKeyDown(event: KeyboardEvent) {
     if (event.key === "Escape") {

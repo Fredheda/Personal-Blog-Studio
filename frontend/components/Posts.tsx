@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
+import { useRequest } from "../effects/useRequest";
 import { postStatus } from "../lib/live-status";
 import { ApiError } from "../lib/problem";
 import { createStudioApi, isConfirmationRequired, type ListItem, type StudioApi } from "../lib/studio-api";
@@ -22,16 +23,10 @@ export function Posts({ api }: { api?: StudioApi }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [ask, setAsk] = useState<{ post: ListItem; kind: "draft" | "post" } | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    client
-      .listPosts()
-      .then((list) => alive && setItems(list))
-      .catch((e) => alive && setLoadError(e instanceof ApiError ? e : new ApiError(0, null)));
-    return () => {
-      alive = false;
-    };
-  }, [client]);
+  useRequest(() => client.listPosts(), client, {
+    onResult: setItems,
+    onError: (e) => setLoadError(e instanceof ApiError ? e : new ApiError(0, null)),
+  });
 
   async function create() {
     setError(null);

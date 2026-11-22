@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+
+import { useLatest } from "../effects/useLatest";
+import { useRequest } from "../effects/useRequest";
 
 import type { CheckState } from "./steps";
 import type { StudioApi } from "./studio-api";
@@ -19,29 +22,17 @@ type Args = {
  *  here), the state stays `running` until the next edit raises the conflict. */
 export function useCheck({ api, id, ready, saves, current }: Args): CheckState {
   const [answer, setAnswer] = useState<{ at: number; state: CheckState } | null>(null);
-  const latest = useRef(current);
-  useEffect(() => {
-    latest.current = current;
+  const latest = useLatest(current);
+  const key = useMemo(() => ({ api, id, saves }), [api, id, saves]);
+  useRequest(() => api.checkPost(id), key, {
+    enabled: ready,
+    onResult: (result) => {
+      const now = latest.current();
+      if (result.bodyEtag !== now.bodyEtag || result.metaEtag !== now.metaEtag) return;
+      setAnswer({ at: saves, state: { phase: "done", problems: result.problems } });
+    },
+    onError: () => setAnswer({ at: saves, state: { phase: "failed" } }),
   });
-
-  useEffect(() => {
-    if (!ready) return;
-    let alive = true;
-    api
-      .checkPost(id)
-      .then((result) => {
-        if (!alive) return;
-        const now = latest.current();
-        if (result.bodyEtag !== now.bodyEtag || result.metaEtag !== now.metaEtag) return;
-        setAnswer({ at: saves, state: { phase: "done", problems: result.problems } });
-      })
-      .catch(() => {
-        if (alive) setAnswer({ at: saves, state: { phase: "failed" } });
-      });
-    return () => {
-      alive = false;
-    };
-  }, [api, id, ready, saves]);
 
   return ready && answer?.at === saves ? answer.state : { phase: "running" };
 }

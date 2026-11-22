@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render as renderUi, screen, waitFor, within } from "@testing-library/react";
-import { useEffect, type ReactElement } from "react";
+import { type ReactElement } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
+import { useWidget } from "../effects/useWidget";
 import { ApiError } from "../lib/problem";
 import type { Draft, StudioApi } from "../lib/studio-api";
 import { PostEditor } from "./PostEditor";
@@ -34,14 +35,21 @@ vi.mock("./CrepeEditor", () => ({
     onChange: (text: string) => void;
     onReady?: (handle: { jumpToLine: (line: number, markdown: string) => boolean } | null) => void;
   }) => {
-    useEffect(() => {
+    const ref = useWidget<HTMLTextAreaElement>(() => {
       const timer = setTimeout(() => onReady?.({ jumpToLine }), editorDelay.ms);
       return () => {
         clearTimeout(timer);
         onReady?.(null);
       };
-    }, [onReady]);
-    return <textarea aria-label="Body (Markdown)" defaultValue={initial} onChange={(e) => onChange(e.target.value)} />;
+    });
+    return (
+      <textarea
+        ref={ref}
+        aria-label="Body (Markdown)"
+        defaultValue={initial}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
   },
 }));
 
