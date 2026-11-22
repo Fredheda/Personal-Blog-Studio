@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
+import { expect, test, type APIRequestContext, type APIResponse, type Page } from "@playwright/test";
 
 import { API_ORIGIN } from "./ports.ts";
 
@@ -287,15 +287,80 @@ test("on a long post the top bar and the steps stay in view at the end of the pa
   await expect(page.getByRole("complementary", { name: "Post steps" }).getByText("1 Write")).toBeInViewport();
 });
 
-test("on a phone Preview and Save sit in a bottom bar and the steps stack above the page", async ({ page, request }) => {
+test("on a phone Preview and Save sit in a bottom bar and the steps are chips", async ({ page, request }) => {
   const { postId } = await createPost(request, { title: unique("Phone"), body: "Text." });
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto(`/posts/${postId}`);
-  const box = await page.getByRole("button", { name: "Save" }).boundingBox();
+  const box = await page.getByRole("button", { name: "Save", exact: true }).boundingBox();
   expect(box !== null && box.y > 700).toBeTruthy();
+  await expect(page.getByRole("complementary", { name: "Post steps" })).toBeHidden();
+  await expect(page.getByRole("group", { name: "Steps summary" })).toBeVisible();
+});
+
+const FAR_HTML_BODY = `# Title\n\n${Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1}.`).join("\n\n")}\n\n<div>raw</div>\n`;
+
+async function caretBlockText(page: Page) {
+  return page.evaluate(() => {
+    const node = document.getSelection()?.anchorNode;
+    const element = node instanceof Element ? node : node?.parentElement;
+    return element?.closest("p")?.textContent ?? "";
+  });
+}
+
+test("a click on a problem in the lane moves the caret to its block, and typing lands there", async ({ page, request }) => {
+  const { postId } = await createPost(request, {
+    title: unique("Jump"),
+    slug: slugFor("jump"),
+    summary: "A summary.",
+    body: FAR_HTML_BODY,
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/posts/${postId}`);
   const lane = page.getByRole("complementary", { name: "Post steps" });
-  await expect(lane).toBeVisible();
-  const laneBox = await lane.boundingBox();
-  const titleBox = await page.getByLabel("Title").boundingBox();
-  expect(laneBox !== null && titleBox !== null && laneBox.y < titleBox.y).toBeTruthy();
+  await lane.getByRole("button", { name: /^Line \d+/ }).click();
+  const block = page.locator(".milkdown .ProseMirror p", { hasText: "raw" });
+  await expect(block).toBeInViewport();
+  expect(await caretBlockText(page)).toContain("raw");
+  await page.keyboard.type("Z");
+  await expect(block).toContainText("Z");
+});
+
+test("on a phone the Check chip opens the problems and a tap on one jumps to its line; the strip stays in view", async ({ page, request }) => {
+  const { postId } = await createPost(request, {
+    title: unique("Phone jump"),
+    slug: slugFor("pj"),
+    summary: "A summary.",
+    body: FAR_HTML_BODY,
+  });
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`/posts/${postId}`);
+  const chips = page.getByRole("group", { name: "Steps summary" });
+  await expect(chips.getByText(/^1 Saved/)).toBeVisible();
+  await expect(chips.getByText(/^3 Not published/)).toBeVisible();
+  await chips.getByRole("button", { name: /to fix/ }).click();
+  await page.getByRole("dialog", { name: "Check" }).getByRole("button", { name: /^Line \d+/ }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".milkdown .ProseMirror p", { hasText: "raw" })).toBeInViewport();
+  expect(await caretBlockText(page)).toContain("raw");
+  await expect(chips).toBeInViewport();
+});
+
+test("on a phone the Publish chip opens the Publish step and Unpublish asks first", async ({ page, request }) => {
+  const { postId } = await createPost(request, {
+    title: unique("Phone live"),
+    slug: slugFor("pl"),
+    summary: "A summary.",
+    body: "Hello.",
+    publish: true,
+  });
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`/posts/${postId}`);
+  await page.getByRole("group", { name: "Steps summary" }).getByRole("button", { name: /^3 Published/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Publish" });
+  await expect(sheet.getByText(/^Published, version 1/)).toBeVisible();
+  await sheet.getByRole("button", { name: "Unpublish" }).click();
+  await expect(page.getByRole("dialog", { name: "Unpublish this post?" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeVisible();
 });
