@@ -5,9 +5,9 @@ DATA = Path(__file__).with_name("comment-directives.txt")
 MARKER = re.compile(r"^(#+|/{2,}|/\*+)\s*")
 
 
-def load(path: Path = DATA) -> dict[str, list[re.Pattern[str]]]:
+def load() -> dict[str, list[re.Pattern[str]]]:
     patterns: dict[str, list[re.Pattern[str]]] = {"python": [], "ts": [], "hash": []}
-    for row in path.read_text().splitlines():
+    for row in DATA.read_text().splitlines():
         if row.strip():
             language, regex = row.split("\t", 1)
             patterns[language].append(re.compile(regex))
