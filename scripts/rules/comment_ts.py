@@ -1,4 +1,6 @@
+import comment_model
 import directives
+from comment_model import Comment
 
 REGEX_KEYWORDS = {
     "return",
@@ -54,21 +56,34 @@ def skip_regex(source: str, start: int) -> int | None:
 
 
 def count(source: str) -> int:
-    lines: set[int] = set()
+    return len(comment_model.lines(comments(source)))
+
+
+def comments(source: str) -> list[Comment]:
+    found: list[Comment] = []
     line = 1
     i = 0
     if source.startswith("#!"):
         i = source.find("\n") if "\n" in source else len(source)
+        found.append(Comment(1, 1, source[:i], True))
     depth = 0
     interpolations: list[int] = []
     previous = ""
     previous_word = ""
     in_template = False
 
-    def record(text: str, first_line: int) -> None:
-        if directives.is_directive(text, "ts"):
-            return
-        lines.update(range(first_line, first_line + text.count("\n") + 1))
+    def record(text: str, first_line: int, start: int) -> None:
+        end = first_line + text.count("\n")
+        before = source[source.rfind("\n", 0, start) + 1 : start]
+        found.append(
+            Comment(
+                first_line,
+                end,
+                text,
+                directives.is_directive(text, "ts"),
+                own_line=not before.strip(),
+            )
+        )
 
     while i < len(source):
         char = source[i]
@@ -98,12 +113,12 @@ def count(source: str) -> int:
         elif source.startswith("//", i):
             end = source.find("\n", i)
             end = len(source) if end == -1 else end
-            record(source[i:end], line)
+            record(source[i:end], line, i)
             i = end
         elif source.startswith("/*", i):
             end = source.find("*/", i + 2)
             end = len(source) if end == -1 else end + 2
-            record(source[i:end], line)
+            record(source[i:end], line, i)
             line += source.count("\n", i, end)
             i = end
         elif char in "'\"":
@@ -141,4 +156,4 @@ def count(source: str) -> int:
                     in_template = True
             previous = char
             i += 1
-    return len(lines)
+    return found

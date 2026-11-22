@@ -1,0 +1,9 @@
+content	all	\b(BLOG|PW|CKE|TA|PP|RR|PAIR)-\d+\b	names a ticket: delete the reference
+content	all	(?i)\b(docs/(specs|plans)/|superpowers)	points at a spec or a plan: delete the pointer
+content	all	(?i)\b(used to be|(it|this|we|which) used to|no longer|git history|removed in|previously|formerly|before this change|after this change|this pr|this ticket)\b	narrates history: delete it
+disable	python	(?i)\bnoqa\b(?!\s*:)	switches off every lint rule: delete it
+disable	python	(?i)\bnoqa\s*:.*\b(ERA\d*|FIX\d*|ALL)\b	switches off a comment lint rule: delete it
+disable	python	\bruff:\s*(disable|enable|file-ignore|ignore)\s*\[[^\]]*\b(ERA\d*|FIX\d*|ALL)\b	switches off a comment lint rule: delete it
+disable	ts	eslint-(disable|enable)(-next-line|-line)?\s*(--.*)?(\*/)?\s*$	switches off every lint rule: delete it
+disable	ts	eslint-disable.*\bno-warning-comments\b	switches off a comment lint rule: delete it
+disable	ts	eslint\s+[^*]*\bno-warning-comments\b	changes a comment lint rule: delete it

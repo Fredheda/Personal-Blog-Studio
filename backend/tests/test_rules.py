@@ -155,6 +155,7 @@ def test_a_clean_change_passes_every_rule(tmp_path):
         "shared-block: ok",
         "comment-count: ok (0 -> 0)",
         "  src.py: 0 -> 0",
+        "comment-content: ok (1 file(s) read)",
     ]
 
 

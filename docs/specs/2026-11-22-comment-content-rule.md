@@ -1,7 +1,7 @@
 # The `comment-content` rule and the comment lint settings
 
 - **Ticket:** BLOG-62 (owner decisions 606: three layers with no new dependency, 607: no escape for the content rule). Layer 3, `comment-count`, is `docs/specs/2026-11-22-comment-count-rule.md`.
-- **Status:** proposed. Plan: `docs/plans/2026-11-22-comment-content-rule.md`.
+- **Status:** done (PR #73). Plan: `docs/plans/2026-11-22-comment-content-rule.md`.
 
 ## Intent
 

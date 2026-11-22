@@ -4,6 +4,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import PurePosixPath
+from types import ModuleType
 
 import comment_hash
 import comment_python
@@ -11,29 +12,34 @@ import comment_ts
 import common
 from pr_size import GENERATED
 
-SUFFIX_COUNTERS: dict[str, Callable[[str], int]] = {
-    ".py": comment_python.count,
-    ".ts": comment_ts.count,
-    ".tsx": comment_ts.count,
-    ".js": comment_ts.count,
-    ".jsx": comment_ts.count,
-    ".mjs": comment_ts.count,
-    ".cjs": comment_ts.count,
-    ".sh": comment_hash.count,
-    ".yml": comment_hash.count,
-    ".yaml": comment_hash.count,
-    ".toml": comment_hash.count,
+SUFFIX_MODULES: dict[str, ModuleType] = {
+    ".py": comment_python,
+    ".ts": comment_ts,
+    ".tsx": comment_ts,
+    ".js": comment_ts,
+    ".jsx": comment_ts,
+    ".mjs": comment_ts,
+    ".cjs": comment_ts,
+    ".sh": comment_hash,
+    ".yml": comment_hash,
+    ".yaml": comment_hash,
+    ".toml": comment_hash,
 }
 REASON = re.compile(r"^Comments:[ \t]+(\S+):[ \t]+\S.*$", re.MULTILINE)
 
 
-def counter_for(path: str) -> Callable[[str], int] | None:
+def module_for(path: str) -> ModuleType | None:
     pure = PurePosixPath(path)
     if path in GENERATED or "fixtures" in pure.parts[:-1]:
         return None
     if pure.name.startswith("Dockerfile"):
-        return comment_hash.count
-    return SUFFIX_COUNTERS.get(pure.suffix)
+        return comment_hash
+    return SUFFIX_MODULES.get(pure.suffix)
+
+
+def counter_for(path: str) -> Callable[[str], int] | None:
+    module = module_for(path)
+    return module.count if module else None
 
 
 def paths_with_reason(text: str | None) -> set[str]:

@@ -1,0 +1,6 @@
+portfolio
+paper-podcasts
+tfl-mcp
+restaurant-researcher-app
+genai-foundations-presentation
+pairprogrammer
