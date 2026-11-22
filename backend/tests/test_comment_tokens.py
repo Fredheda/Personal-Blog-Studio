@@ -1,5 +1,6 @@
 import comment_hash
 import comment_python
+import comment_ts
 import pytest
 
 
@@ -49,3 +50,36 @@ def test_python_unreadable_source_raises():
 )
 def test_hash_counts(source, expected):
     assert comment_hash.count(source) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("const a = 1; // note\n", 1),
+        ("// a\n// b\n", 2),
+        ("/* one\n two */\nconst a = 1;\n", 2),
+        ("const x = <div>{/* jsx */}</div>;\n", 1),
+        ("const u = \"https://x.y\"; const v = 'a // b';\n", 0),
+        ("const t = `a // b ${x /* c */} d`;\n", 1),
+        ("const t = `a ${`b // c`} d`;\n", 0),
+        ("const r = /\\/\\/ x/;\n", 0),
+        ("const q = b / 2 / 3; // c\n", 1),
+        ("function f(s) { return /x/.test(s); } // c\n", 1),
+        ("const q = (a) / 2; // c\n", 1),
+        ("const p = <p>Don't // no</p>;\n// real\n", 1),
+        ("const a = <a>x</a>; // c\n", 1),
+        ("const a = <a>x</a>{/* c */};\n", 1),
+        ("const a = <b>{/* c */}</b>;\nconst d = <i/>; // d\n", 2),
+        ("// eslint-disable-next-line no-console\n", 0),
+        ("// we use eslint-disable here\n", 1),
+        ("/* istanbul ignore next */\n", 0),
+        ("// @ts-expect-error reason\n", 0),
+        ('/// <reference types="x" />\n', 0),
+        ("#!/usr/bin/env node\n// a\n", 1),
+        ("/* // */\n", 1),
+        ("// plain\n// eslint-disable-line\n", 1),
+        ("/**\n * Header narrative.\n * More.\n */\nexport {};\n", 4),
+    ],
+)
+def test_ts_counts(source, expected):
+    assert comment_ts.count(source) == expected
