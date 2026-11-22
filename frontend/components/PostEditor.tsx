@@ -3,15 +3,31 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { createAutosave, type AutosaveStatus } from "../lib/autosave";
 import { publishedNotice, unpublishedNotice } from "../lib/live-status";
 import { ApiError } from "../lib/problem";
-import { createStudioApi, type Draft, type StudioApi } from "../lib/studio-api";
+import {
+  checkStep,
+  publishGate,
+  publishStep,
+  relativeTime,
+  saveEnabled,
+  saveKind,
+  writeStep,
+  type CheckState,
+} from "../lib/steps";
+import { createStudioApi, type CheckProblem, type Draft, type StudioApi } from "../lib/studio-api";
+import { useCheck } from "../lib/use-check";
 import { Button } from "./Button";
+import { Dialog } from "./Dialog";
 import { MessageStrip } from "./MessageStrip";
 import { Preview } from "./Preview";
 import { ProblemList } from "./ProblemList";
+import { StepsLane } from "./StepsLane";
+import { TopBarActions } from "./TopBarActions";
+import { useTopBarSlot } from "./TopBarSlot";
 
 const CrepeEditor = dynamic(() => import("./CrepeEditor").then((m) => m.CrepeEditor), {
   ssr: false,
@@ -19,14 +35,7 @@ const CrepeEditor = dynamic(() => import("./CrepeEditor").then((m) => m.CrepeEdi
 });
 
 const STALE = "This post changed elsewhere. Reload it to continue; your unsaved text stays on the page until then.";
-const STATUS_TEXT: Record<AutosaveStatus, string> = {
-  idle: "",
-  pending: "Unsaved changes",
-  saving: "Saving…",
-  saved: "Saved",
-  conflict: "Not saved",
-  error: "Not saved (press Save or keep typing to try again)",
-};
+const REFUSED = "Not published: fix the problems listed under Check.";
 
 const toApiError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(0, null));
 
@@ -36,6 +45,7 @@ function splitTags(text: string): string[] {
 
 export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const client = useMemo(() => api ?? createStudioApi(), [api]);
+  const slot = useTopBarSlot();
   const [saved, setSaved] = useState<Draft | null>(null);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -48,12 +58,19 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [bodyError, setBodyError] = useState<ApiError | null>(null); // autosave
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [saves, setSaves] = useState(0); // every successful save and every reload: the check asks again
+  const [refusal, setRefusal] = useState<{ problems: CheckProblem[]; at: number } | null>(null);
+  const [askUnpublish, setAskUnpublish] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
-  // The body ETag lives in a ref: the save callback updates it before it
-  // resolves, so two saves in a row never send a stale one.
+  // The ETags live in refs: the save callback updates the body's before it
+  // resolves, so two saves in a row never send a stale one, and the check hook
+  // compares its answer with the current pair.
   const bodyEtag = useRef("");
+  const metaEtag = useRef("");
   const autosave = useRef<ReturnType<typeof createAutosave> | null>(null);
   const running = useRef(false); // saveAll() in progress: a second click sends nothing
 
@@ -66,6 +83,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setTags(draft.tags.join(", "));
     setBody(draft.body);
     bodyEtag.current = draft.bodyEtag;
+    metaEtag.current = draft.metaEtag;
   }
 
   // The details were saved: the answer carries the whole draft, but only the
@@ -87,6 +105,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
             metaEtag: draft.metaEtag,
           },
     );
+    metaEtag.current = draft.metaEtag;
     setTitle(draft.title);
     setSlug(draft.slug);
     setSummary(draft.summary);
@@ -103,6 +122,12 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       alive = false;
     };
   }, [client, id, reloadKey]);
+
+  // Display only: keeps "Saved 2 min ago" current. Saving never runs on a timer.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // One body autosave per loaded post. Leaving flushes first and stops only
   // after the flush settles, so text typed during a save is not lost.
@@ -126,6 +151,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
               previous === null ? previous : { ...previous, body: text, bodyEtag: next.bodyEtag, updatedAt: next.updatedAt },
             );
             setBodyError(null);
+            setSaves((n) => n + 1);
           }
         } catch (e) {
           if (alive) setBodyError(toApiError(e)); // the reason must reach the screen
@@ -139,6 +165,14 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       void controller.close();
     };
   }, [client, id, reloadKey]);
+
+  const check = useCheck({
+    api: client,
+    id,
+    ready: saved !== null,
+    saves,
+    current: () => ({ bodyEtag: bodyEtag.current, metaEtag: metaEtag.current }),
+  });
 
   // Unsaved details count too: leaving with an edited title or slug warns.
   const detailsUnsaved =
@@ -159,17 +193,28 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
 
   if (loadError) {
     return (
-      <section>
+      <section className="mx-auto max-w-[720px] px-6 pt-10">
         <ProblemList error={loadError} />
         <p><Link href="/">Back to the list</Link></p>
       </section>
     );
   }
-  if (saved === null) return <p>Loading…</p>;
+  if (saved === null) return <p className="px-6 pt-10">Loading…</p>;
 
   const metaDirty = detailsUnsaved;
   const bodyUnsaved = status === "pending" || status === "saving" || status === "error";
   const conflict = status === "conflict" || error?.status === 412 || bodyError?.status === 412;
+  const kind = saveKind({
+    conflict,
+    bodyFailed: status === "error",
+    saving: busy || status === "saving",
+    detailsUnsaved: metaDirty,
+    bodyPending: status === "pending",
+  });
+  const ago = relativeTime(saved.updatedAt, now);
+  const activeRefusal = refusal !== null && refusal.at === saves ? refusal.problems : null;
+  const checkState: CheckState = activeRefusal ? { phase: "done", problems: activeRefusal } : check;
+  const gate = publishGate({ kind, check: checkState, busy: busy || publishing });
 
   /** Saves everything that is unsaved: the details first (details ETag), then
    *  the body (body ETag, through the autosave controller). True only when both
@@ -187,6 +232,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
           const next = await client.patchMeta(id, { title, slug, summary, tags: splitTags(tags) }, saved!.metaEtag);
           adoptDetails(next);
           setError(null);
+          setSaves((n) => n + 1);
         } catch (e) {
           setError(toApiError(e));
           ok = false;
@@ -198,15 +244,57 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
       running.current = false;
       setBusy(false);
     }
-    if (ok) setNotice("Saved.");
     return ok;
   }
 
-  async function run(action: () => Promise<void>) {
+  /** The status fields (published, version, dates) of the post as the API has them now; never the text. */
+  async function refreshStatus() {
+    try {
+      const fresh = await client.getPost(id);
+      setSaved((previous) =>
+        previous === null
+          ? previous
+          : {
+              ...previous,
+              published: fresh.published,
+              version: fresh.version,
+              publishedAt: fresh.publishedAt,
+              versionPublishedAt: fresh.versionPublishedAt,
+              slugLocked: fresh.slugLocked,
+            },
+      );
+    } catch (e) {
+      setError(toApiError(e));
+    }
+  }
+
+  async function doPublish() {
+    setPublishing(true);
+    setError(null);
+    setNotice("");
+    setRefusal(null);
+    try {
+      const published = await client.publish(id, bodyEtag.current);
+      setNotice(publishedNotice(published.version, published.slug));
+      await refreshStatus();
+    } catch (e) {
+      const failure = toApiError(e);
+      const listed = failure.problem?.problems ?? [];
+      if (failure.status === 422 && listed.length > 0) setRefusal({ problems: listed, at: saves });
+      else setError(failure);
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function doUnpublish() {
+    setAskUnpublish(false);
     setError(null);
     setNotice("");
     try {
-      await action();
+      await client.unpublish(id);
+      setNotice(unpublishedNotice(saved!.slug));
+      await refreshStatus();
     } catch (e) {
       setError(toApiError(e));
     }
@@ -214,99 +302,110 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
 
   const shownError = error?.status === 412 ? null : error;
   const shownBodyError = bodyError?.status === 412 ? null : bodyError;
+  const edited = () => setNotice("");
 
   return (
-    <section>
-      <h1>{saved.title || "(untitled)"}</h1>
-
-      <label htmlFor="title">Title</label>
-      <input id="title" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
-      <label htmlFor="slug">Slug</label>
-      <input id="slug" value={slug} onChange={(e) => setSlug(e.target.value)} />
-      <label htmlFor="summary">Summary</label>
-      <textarea id="summary" style={{ minHeight: "4rem" }} value={summary} maxLength={500} onChange={(e) => setSummary(e.target.value)} />
-      <label htmlFor="tags">Tags (comma separated, optional)</label>
-      <input id="tags" value={tags} onChange={(e) => setTags(e.target.value)} />
-
-      <div className="tabs" role="group" aria-label="View">
-        <Button aria-pressed={view === "edit"} onClick={() => setView("edit")}>Edit</Button>
-        <Button aria-pressed={view === "preview"} onClick={() => setView("preview")}>Preview</Button>
-      </div>
-      <div hidden={view !== "edit"}>
-        <CrepeEditor
-          key={reloadKey}
-          initial={saved.body}
-          onChange={(text) => {
-            setBody(text);
-            autosave.current?.push(text);
-          }}
-        />
-      </div>
-      {view === "preview" && (
-        <>
-          {bodyUnsaved && <p className="status">Preview of the text as you typed it.</p>}
-          <Preview markdown={body} />
-        </>
-      )}
-      <p className="status" role="status">{STATUS_TEXT[status]}</p>
-
-      <Button
-        disabled={busy || conflict || (!metaDirty && !bodyUnsaved)}
-        onClick={() => void saveAll()}
+    <div className="min-[760px]:grid min-[760px]:grid-cols-[232px_1fr] min-[1180px]:grid-cols-[262px_1fr]">
+      <aside
+        aria-label="Post steps"
+        className="border-b border-line bg-deep p-4 min-[760px]:min-h-[calc(100vh-58px)] min-[760px]:border-b-0 min-[760px]:border-r"
       >
-        Save
-      </Button>
+        <div className="min-[760px]:sticky min-[760px]:top-[58px] min-[760px]:max-h-[calc(100vh-58px)] min-[760px]:overflow-y-auto">
+          <StepsLane
+            write={writeStep(kind, ago)}
+            check={checkStep(kind, checkState)}
+            publish={publishStep(saved, kind, checkState)}
+            onUnpublish={() => setAskUnpublish(true)}
+          />
+        </div>
+      </aside>
 
-      <hr />
-      <Button
-        variant="primary"
-        disabled={busy || conflict || metaDirty || bodyUnsaved}
-        title={metaDirty || bodyUnsaved ? "Save your edits first" : undefined}
-        onClick={() =>
-          run(async () => {
-            const published = await client.publish(id, bodyEtag.current);
-            setNotice(publishedNotice(published.version, published.slug));
-          })
-        }
-      >
-        Publish
-      </Button>
-      <Button
-        onClick={() =>
-          run(async () => {
-            await client.unpublish(id);
-            setNotice(unpublishedNotice(saved.slug));
-          })
-        }
-      >
-        Unpublish
-      </Button>
+      <section className="mx-auto w-full min-w-0 max-w-[720px] px-[18px] pb-24 pt-6 min-[760px]:px-6 min-[760px]:pb-10 min-[760px]:pt-10">
+        {conflict && (
+          <MessageStrip
+            kind="conflict"
+            action={
+              <Button
+                variant="primary"
+                className="m-0"
+                onClick={() => {
+                  setError(null);
+                  setBodyError(null);
+                  setRefusal(null);
+                  setStatus("idle");
+                  setSaved(null); // the editor remounts with the reloaded text
+                  setSaves((n) => n + 1);
+                  setReloadKey((k) => k + 1);
+                }}
+              >
+                Reload the post
+              </Button>
+            }
+          >
+            {STALE}
+          </MessageStrip>
+        )}
+        <ProblemList error={shownBodyError} />
+        <ProblemList error={shownError} />
+        {activeRefusal && <MessageStrip kind="warning">{REFUSED}</MessageStrip>}
+        {notice && <MessageStrip kind="success">{notice}</MessageStrip>}
 
-      {conflict && (
-        <MessageStrip
-          kind="conflict"
-          action={
-            <Button
-              variant="primary"
-              className="m-0"
-              onClick={() => {
-                setError(null);
-                setBodyError(null);
-                setStatus("idle");
-                setSaved(null); // the editor remounts with the reloaded text
-                setReloadKey((k) => k + 1);
-              }}
-            >
-              Reload the post
-            </Button>
-          }
+        <h1>{saved.title || "(untitled)"}</h1>
+
+        <label htmlFor="title">Title</label>
+        <input id="title" value={title} maxLength={200} onChange={(e) => { setTitle(e.target.value); edited(); }} />
+        <label htmlFor="slug">Slug</label>
+        <input id="slug" value={slug} onChange={(e) => { setSlug(e.target.value); edited(); }} />
+        <label htmlFor="summary">Summary</label>
+        <textarea id="summary" style={{ minHeight: "4rem" }} value={summary} maxLength={500} onChange={(e) => { setSummary(e.target.value); edited(); }} />
+        <label htmlFor="tags">Tags (comma separated, optional)</label>
+        <input id="tags" value={tags} onChange={(e) => { setTags(e.target.value); edited(); }} />
+
+        <div className="mt-4" hidden={view !== "edit"}>
+          <CrepeEditor
+            key={reloadKey}
+            initial={saved.body}
+            onChange={(text) => {
+              setBody(text);
+              edited();
+              autosave.current?.push(text);
+            }}
+          />
+        </div>
+        {view === "preview" && (
+          <div className="mt-4">
+            {bodyUnsaved && <p className="status">Preview of the text as you typed it.</p>}
+            <Preview markdown={body} />
+          </div>
+        )}
+      </section>
+
+      {slot.node &&
+        createPortal(
+          <TopBarActions
+            kind={kind}
+            ago={ago}
+            previewOn={view === "preview"}
+            onPreview={() => setView((v) => (v === "edit" ? "preview" : "edit"))}
+            canSave={saveEnabled(kind)}
+            onSave={() => void saveAll()}
+            publish={gate}
+            onPublish={() => void doPublish()}
+          />,
+          slot.node,
+        )}
+
+      {askUnpublish && (
+        <Dialog
+          title="Unpublish this post?"
+          cancelLabel="Keep it published"
+          confirmLabel="Unpublish"
+          onCancel={() => setAskUnpublish(false)}
+          onConfirm={() => void doUnpublish()}
         >
-          {STALE}
-        </MessageStrip>
+          It leaves the blog at once. The draft and its published versions stay in the studio.
+        </Dialog>
       )}
-      <ProblemList error={shownBodyError} />
-      <ProblemList error={shownError} />
-      {notice && <MessageStrip kind="success">{notice}</MessageStrip>}
-    </section>
+    </div>
   );
 }
