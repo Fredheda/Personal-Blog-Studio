@@ -1,0 +1,62 @@
+flowchart TB
+  classDef new fill:#c8e6c9,stroke:#2e7d32,color:#000
+  classDef changed fill:#ffe0b2,stroke:#ef6c00,color:#000
+  classDef unchanged fill:#e0e0e0,stroke:#616161,color:#000
+
+  subgraph local["Developer or agent machine"]
+    cilocal["scripts/ci-local.sh"]:::unchanged
+  end
+
+  subgraph github["GitHub"]
+    pr["Pull request description<br/>line: Comments: reason"]:::unchanged
+    api["REST API pulls/n"]:::unchanged
+    summary["Job summary table"]:::unchanged
+    subgraph job["CI job rules (ci.yml)"]
+      run["scripts/rules/run.sh"]:::changed
+      size["pr_size.py"]:::unchanged
+      loc["spec_location.py"]:::unchanged
+      blk["shared_block.py"]:::unchanged
+      cc["comment_count.py"]:::new
+      py["comment_python.py<br/>tokenize + ast"]:::new
+      ts["comment_ts.py<br/>state machine"]:::new
+      dir["directives.py +<br/>comment-directives.txt"]:::new
+    end
+  end
+
+  subgraph repo["Repository (git history)"]
+    base["Files at merge-base"]:::unchanged
+    head["Files at HEAD"]:::unchanged
+  end
+
+  subgraph tests["backend/tests"]
+    sup["rules_support.py"]:::new
+    tok["test_comment_tokens.py"]:::new
+    tcc["test_comment_count.py"]:::new
+    tr["test_rules.py"]:::changed
+  end
+
+  cilocal -->|"COMMENTS_REASON"| run
+  run --> size
+  run --> loc
+  run --> blk
+  run --> cc
+  cc --> py
+  cc --> ts
+  py --> dir
+  ts --> dir
+  cc -->|"git show"| base
+  cc -->|"git show"| head
+  cc -->|"gh api"| api
+  api --> pr
+  cc -->|"GITHUB_STEP_SUMMARY"| summary
+  tcc --> sup
+  tr --> sup
+  tok --> py
+  tok --> ts
+  tcc --> cc
+
+  subgraph legend["Legend"]
+    l1["new"]:::new
+    l2["changed"]:::changed
+    l3["unchanged"]:::unchanged
+  end
