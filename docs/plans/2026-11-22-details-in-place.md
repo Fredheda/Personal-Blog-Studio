@@ -8,7 +8,7 @@
 
 - Ships one PR: the title as the page `h1`, the summary under it, the slug pill and the tag pills typed in the page (`PostDetails`), replacing the labelled form and the repeated saved-title heading. Saving is unchanged: details still save only through Save.
 - New files: `lib/tags.ts`, `lib/slug.ts`, `components/PostDetails.tsx` and a test file each; changed files: `PostEditor.tsx`, `PostEditor.test.tsx`, `e2e/studio.spec.ts` and `AGENTS.md` (ten files, about 550 changed lines).
-- Tests first: four browser tests are written and run red before any code; each unit gets its test red before its code. The prototype of this plan passed 331 frontend tests (314 existing plus 17 new), 23 browser tests (19 existing plus 4 new), lint and types.
+- Tests first: four browser tests are written and run red before any code; each unit gets its test red before its code. The prototype of this plan passed 332 frontend tests (314 existing plus 18 new), 23 browser tests (19 existing plus 4 new), lint and types.
 - Behaviour change worth a look: tags typed in the pill input are added to the list (the old field replaced the whole text); duplicates are dropped ignoring case; the slug input filters what is typed.
 - No new dependency, no workflow change, no API change, no new Azure resource. Cost: none. Feature-class PR: the owner gets the local-run-or-merge choice.
 - A separate cleanup commit cuts the comments in `PostEditor.tsx` that restate the code (24 to 9).
@@ -56,7 +56,7 @@ flowchart TB
 ## Owner gates
 
 - After Task 6: `cd frontend && E2E_SKIP_BUILD=1 npm run e2e` prints `23 passed`.
-- After Task 8: the owner may run the PR branch locally (coordinator offers it); what to check: open a post, click the title and type, click `/slug`, add and remove tags with Enter, comma and Backspace, press Save, reload, press Preview, shrink the window to a phone width.
+- After Task 8: the owner may run the PR branch locally (coordinator offers it); what to check: open a post, click the title and type, click `/slug`, add and remove tags with Enter, comma and Backspace, press Save, reload, press Preview, shrink the window to a phone width, type a long summary (it grows), and a long title (known: the one-line title input scrolls sideways; decide whether it should wrap).
 
 ## Tasks
 
@@ -117,11 +117,9 @@ test("the title, summary, slug and tags are typed in the page and saved with Sav
   await page.getByLabel("Tags").fill("maths, physics, extra,");
   await page.getByLabel("Tags").press("Backspace");
   await expect(page.getByRole("button", { name: "Remove tag extra" })).toHaveCount(0);
-  await page.getByLabel("Tags").fill("chemistry");
-  await page.getByLabel("Tags").press("Enter");
-  await expect(page.getByRole("button", { name: "Remove tag maths" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Remove tag chemistry" })).toBeVisible();
   await page.getByRole("button", { name: "Remove tag maths" }).click();
+  await page.getByRole("button", { name: "Add a tag" }).click();
+  await page.getByLabel("Tags").fill("chemistry");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("banner").getByText(/^Saved/)).toBeVisible();
   await expect
@@ -292,7 +290,7 @@ export function slugInput(value: string): string {
 ```tsx
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PostDetails } from "./PostDetails";
 
@@ -326,8 +324,6 @@ function Harness({
     />
   );
 }
-
-const names = () => screen.getAllByRole("button").map((b) => b.textContent ?? "");
 
 describe("title and summary", () => {
   it("are typed in place with their names, limits and placeholders", () => {
@@ -384,7 +380,7 @@ describe("the tag pills", () => {
   it("lists the tags with a remove button each", () => {
     render(<Harness initial={{ title: "T", summary: "", slug: "s", tags: ["a", "b"] }} />);
     fireEvent.click(screen.getByRole("button", { name: "Remove tag a" }));
-    expect(names()).not.toContain("Remove tag a");
+    expect(screen.queryByRole("button", { name: "Remove tag a" })).toBeNull();
     expect(screen.getByRole("button", { name: "Remove tag b" })).toBeTruthy();
   });
 
@@ -409,6 +405,29 @@ describe("the tag pills", () => {
     fireEvent.keyDown(input, { key: "Backspace" });
     expect(screen.queryByRole("button", { name: "Remove tag b" })).toBeNull();
     expect(screen.getByRole("button", { name: "Remove tag a" })).toBeTruthy();
+  });
+
+  it("does not call onTags when an empty tag input loses focus or Backspace has no tags", () => {
+    const onTags = vi.fn();
+    render(
+      <PostDetails
+        title="T"
+        summary=""
+        slug="s"
+        tags={[]}
+        slugLocked={false}
+        preview={false}
+        onTitle={() => {}}
+        onSummary={() => {}}
+        onSlug={() => {}}
+        onTags={onTags}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add a tag" }));
+    const input = screen.getByLabelText("Tags");
+    fireEvent.keyDown(input, { key: "Backspace" });
+    fireEvent.blur(input);
+    expect(onTags).not.toHaveBeenCalled();
   });
 
   it("keeps what was typed when the input loses focus", () => {
@@ -506,8 +525,9 @@ export function PostDetails({
     );
   }
 
-  function commit() {
-    onTags(addTags(tags, text));
+  function addText(value: string) {
+    const next = addTags(tags, value);
+    if (next.length !== tags.length) onTags(next);
     setText("");
   }
 
@@ -530,7 +550,7 @@ export function PostDetails({
         rows={2}
         value={summary}
         onChange={(e) => onSummary(e.target.value)}
-        className="mt-1 w-full resize-none border-0 bg-transparent p-0 text-[18.5px] text-muted outline-none placeholder:text-muted"
+        className="mt-1 w-full resize-none field-sizing-content border-0 bg-transparent p-0 text-[18.5px] text-muted outline-none placeholder:text-muted"
       />
       <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-line pb-4">
         {slugLocked ? (
@@ -572,8 +592,7 @@ export function PostDetails({
             onChange={(e) => {
               const value = e.target.value;
               if (value.includes(",")) {
-                onTags(addTags(tags, value));
-                setText("");
+                addText(value);
               } else {
                 setText(value);
               }
@@ -581,13 +600,13 @@ export function PostDetails({
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                commit();
-              } else if (e.key === "Backspace" && text === "") {
+                addText(text);
+              } else if (e.key === "Backspace" && text === "" && tags.length > 0) {
                 onTags(removeLast(tags));
               }
             }}
             onBlur={() => {
-              commit();
+              addText(text);
               setAdding(false);
             }}
             className={`${PILL} w-32 outline-none`}
@@ -603,7 +622,7 @@ export function PostDetails({
 }
 ```
 
-- [ ] **Step 4:** rerun Step 2's command. Expected: `10 passed`. Mutations (each must turn a test red, then restore): (a) remove `commit();` from the tag input's `onBlur` (`keeps what was typed when the input loses focus` fails); (b) change `if (preview) {` to `if (false as boolean) {` (`shows the details as plain text` fails); (c) remove `maxLength={100}` (`accepts only lower-case letters...` fails).
+- [ ] **Step 4:** rerun Step 2's command. Expected: `11 passed`. Mutations (each must turn a test red, then restore): (a) remove `addText(text);` from the tag input's `onBlur` (`keeps what was typed when the input loses focus` fails); (b) change `if (preview) {` to `if (false as boolean) {` (`shows the details as plain text` fails); (c) remove `maxLength={100}` (`accepts only lower-case letters...` fails); (d) remove the `if (next.length !== tags.length)` guard (`does not call onTags when an empty tag input loses focus` fails).
 - [ ] **Step 5:** `git add frontend/components && git commit -m "Add PostDetails: title, summary, slug and tag pills"`.
 
 ### Task 5: Use it in PostEditor
@@ -700,7 +719,7 @@ with
         />
 ```
 
-- [ ] **Step 4:** `cd frontend && npx vitest run && npm run lint && npx tsc --noEmit`. Expected: `Tests  331 passed (331)`, lint and tsc print no error.
+- [ ] **Step 4:** `cd frontend && npx vitest run && npm run lint && npx tsc --noEmit`. Expected: `Tests  332 passed (332)`, lint and tsc print no error.
 - [ ] **Step 5:** `git add frontend && git commit -m "Type the post details in place"`.
 
 ### Task 6: Browser tests, green
