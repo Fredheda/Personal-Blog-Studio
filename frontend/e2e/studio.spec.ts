@@ -68,7 +68,7 @@ test("typing in the editor autosaves the text through the real ETag flow", async
   await page.goto(`/posts/${postId}`);
   await page.locator(".milkdown .ProseMirror").click();
   await page.keyboard.type("Hello from the browser");
-  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await expect(page.getByRole("banner").getByText(/^Saved/)).toBeVisible();
   await expect.poll(async () => (await stored(request, postId)).body).toContain("Hello from the browser");
 });
 
@@ -191,4 +191,111 @@ test("the list shows draft and published pills and the white primary button", as
   await expect(row.locator(".bg-ok")).toHaveCSS("background-color", "rgb(95, 227, 161)");
   await page.getByLabel("Title").fill("x");
   await expect(page.getByRole("button", { name: "Create post" })).toHaveCSS("background-color", "rgb(255, 255, 255)");
+});
+
+const RAW_HTML_BODY = "# Title\n\nText.\n\n<div>raw</div>\n";
+const slugFor = (label: string) => `${label}-${Math.random().toString(36).slice(2, 8)}`;
+
+test("a post with a problem shows it under Check, keeps Publish off, and publishes once it is fixed", async ({ page, request }) => {
+  const { postId } = await createPost(request, {
+    title: unique("Fix"),
+    slug: slugFor("fix"),
+    summary: "A summary.",
+    body: RAW_HTML_BODY,
+  });
+  await page.goto(`/posts/${postId}`);
+  const lane = page.getByRole("complementary", { name: "Post steps" });
+  await expect(lane.getByText(/to fix before publishing/)).toBeVisible();
+  await expect(lane.getByText(/^Line \d+/)).toBeVisible();
+  const publish = page.getByRole("banner").getByRole("button", { name: "Publish" });
+  await expect(publish).toBeDisabled();
+  await expect(publish).toHaveAttribute("title", "Fix the problems under Check first");
+
+  await page.locator(".milkdown .ProseMirror").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("Plain text now");
+  await expect(lane.getByText("No problems found")).toBeVisible();
+  await expect(publish).toBeEnabled();
+  await publish.click();
+  await expect(page.getByRole("status").filter({ hasText: /^Published as version 1/ })).toBeVisible();
+  await expect(lane.getByText(/^Published, version 1, on /)).toBeVisible();
+});
+
+test("Unpublish asks in a dialog from the Publish step, and unpublishes on the answer", async ({ page, request }) => {
+  const { postId } = await createPost(request, {
+    title: unique("Live"),
+    slug: slugFor("live"),
+    summary: "A summary.",
+    body: "Hello.",
+    publish: true,
+  });
+  await page.goto(`/posts/${postId}`);
+  const lane = page.getByRole("complementary", { name: "Post steps" });
+  await lane.getByRole("button", { name: "Unpublish" }).click();
+  await expect(page.getByRole("dialog", { name: "Unpublish this post?" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(lane.getByText(/^Published, version 1/)).toBeVisible();
+  await lane.getByRole("button", { name: "Unpublish" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Unpublish" }).click();
+  await expect(page.getByText(/^Unpublished\./)).toBeVisible();
+  await expect(lane.getByText(/^Not published yet/)).toBeVisible();
+});
+
+test("a change made elsewhere shows the conflict strip and turns Save and Publish off", async ({ page, request }) => {
+  const { postId } = await createPost(request, { title: unique("Clash"), body: "One." });
+  await page.goto(`/posts/${postId}`);
+  await expect(page.getByRole("banner").getByText(/^Saved/)).toBeVisible();
+  const current = await (await must(await request.get(`${API_ORIGIN}/posts/${postId}`))).json();
+  await must(
+    await request.put(`${API_ORIGIN}/posts/${postId}/body`, {
+      headers: { ...HEADERS, "if-match": current.bodyEtag },
+      data: { body: "Changed elsewhere." },
+    }),
+  );
+  await page.locator(".milkdown .ProseMirror").click();
+  await page.keyboard.type(" more");
+  await expect(page.getByRole("alert").filter({ hasText: "This post changed elsewhere" })).toBeVisible();
+  await expect(page.getByRole("banner").getByText("Not saved: the post changed elsewhere")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Publish" })).toBeDisabled();
+});
+
+test("on a wide screen the lane is a 262px column beside the page; Preview toggles in the top bar", async ({ page, request }) => {
+  const { postId } = await createPost(request, { title: unique("Layout"), body: "# Heading\n\nText." });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/posts/${postId}`);
+  const lane = page.getByRole("complementary", { name: "Post steps" });
+  await expect(lane).toHaveCSS("width", "262px");
+  const preview = page.getByRole("banner").getByRole("button", { name: "Preview" });
+  await preview.click();
+  await expect(preview).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".post-body h1")).toHaveText("Heading");
+  await preview.click();
+  await expect(page.locator(".milkdown .ProseMirror")).toBeVisible();
+});
+
+test("on a long post the top bar and the steps stay in view at the end of the page", async ({ page, request }) => {
+  const body = Array.from({ length: 120 }, (_, i) => `Paragraph ${i + 1}.`).join("\n\n");
+  const { postId } = await createPost(request, { title: unique("Long"), body });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/posts/${postId}`);
+  await expect(page.locator(".milkdown .ProseMirror")).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(page.getByText("Paragraph 120.")).toBeInViewport();
+  await expect(page.getByRole("banner").getByRole("button", { name: "Publish" })).toBeInViewport();
+  await expect(page.getByRole("complementary", { name: "Post steps" }).getByText("1 Write")).toBeInViewport();
+});
+
+test("on a phone Preview and Save sit in a bottom bar and the steps stack above the page", async ({ page, request }) => {
+  const { postId } = await createPost(request, { title: unique("Phone"), body: "Text." });
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`/posts/${postId}`);
+  const box = await page.getByRole("button", { name: "Save" }).boundingBox();
+  expect(box !== null && box.y > 700).toBeTruthy();
+  const lane = page.getByRole("complementary", { name: "Post steps" });
+  await expect(lane).toBeVisible();
+  const laneBox = await lane.boundingBox();
+  const titleBox = await page.getByLabel("Title").boundingBox();
+  expect(laneBox !== null && titleBox !== null && laneBox.y < titleBox.y).toBeTruthy();
 });
