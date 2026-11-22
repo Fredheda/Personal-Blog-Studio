@@ -96,7 +96,7 @@ CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-l
 | Python dependencies | `cd backend && poetry run pip install pip-audit==2.10.1 && poetry run pip-audit --local` |
 | Frontend dependencies | `cd frontend && npm audit --omit=dev --audit-level=high` |
 
-Dependabot (`.github/dependabot.yml`) opens weekly PRs: one grouped PR per ecosystem for minor and patch updates, majors separate, only releases older than 14 days; the Node 26 and Python 3.13 images are left to hand. Alerts and security updates are repo settings. Dependabot PRs get no secrets, so the AI review skips them.
+Dependabot (`.github/dependabot.yml`) opens weekly PRs: one grouped PR per ecosystem for minor and patch updates, majors separate, only releases older than 14 days; the Node 26 and Python 3.13 images are left to hand, and the `typescript` major is ignored until typescript-eslint supports TypeScript 7.x (remove the `ignore` entry then). Alerts and security updates are repo settings. Dependabot PRs get no secrets, so the AI review skips them.
 
 ## AI PR review
 
