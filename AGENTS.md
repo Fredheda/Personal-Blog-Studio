@@ -4,7 +4,7 @@ Repo facts first, then the shared rules. A local session also reads the workspac
 
 PR titles and descriptions never mention Claude Code.
 
-- **Merging:** the owner merges, except the bot and docs classes in the workspace `AGENTS.md` (Git), which the coordinator merges.
+- **Merging:** the coordinator merges the bot and docs classes listed in the workspace `AGENTS.md` (Git); the owner merges everything else.
 
 ## What this is
 
@@ -57,7 +57,7 @@ CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-l
 
 ## Gotchas
 
-- Public repo: never commit post content, media, audio, keys or `.env` files. `.gitignore` carries the baseline.
+- Public repo: never commit post content, media or audio. `.gitignore` carries the baseline.
 - The read API is not public. Nothing client-specific (Portfolio or otherwise) belongs in this repo.
 - `backend/` holds one Poetry project and two images. `Dockerfile.blogapi` copies `blog_core` and `blog_api` only; the read-API process must never import studio code or agent/LLM libraries (`backend/tests/test_apps.py` and `backend/tests/test_dockerfiles.py` pin both).
 - `blog_core` also holds ids (`ids.py`), blob paths (`layout.py`), stored-document models (`models.py`) and the `BlobStore` interface (`store.py`). `AzureBlobStore` is the production store (managed identity); `tests/fake_blob_store.py` is the unit-test store (its default clock is earlier than any service clock: a test that needs blob times to count passes the service's clock). The store lists last-modified times (`modified_times`), which is how a body save counts as an edit without rewriting `draft.json`. Every blob path comes from `layout.py`. Change the store or the fake only together with `tests/test_store_contract.py`, which CI's `storage-contract` job also runs against Azurite (by hand: `DEPLOYMENT.md`, "Storage tests against Azurite").
