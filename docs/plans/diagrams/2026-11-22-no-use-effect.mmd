@@ -1,0 +1,63 @@
+flowchart TB
+  classDef new fill:#c8e6c9,stroke:#2e7d32,color:#000
+  classDef changed fill:#ffe0b2,stroke:#ef6c00,color:#000
+  classDef unchanged fill:#e0e0e0,stroke:#616161,color:#000
+
+  subgraph components["frontend/components and lib"]
+    editor["PostEditor.tsx"]:::changed
+    crepe["CrepeEditor.tsx"]:::changed
+    posts["Posts.tsx"]:::changed
+    modal["useModal.ts"]:::changed
+    check["lib/use-check.ts"]:::changed
+    autosave["lib/autosave.ts"]:::unchanged
+    api["lib/studio-api.ts"]:::unchanged
+  end
+
+  subgraph effects["frontend/effects (the only place that may import an effect hook)"]
+    latest["useLatest"]:::new
+    listener["useWindowListener"]:::new
+    interval["useInterval"]:::new
+    request["useRequest"]:::new
+    controller["useController"]:::new
+    widget["useWidget"]:::new
+    focus["useFocusReturn"]:::new
+  end
+
+  subgraph checks["Checks"]
+    lint["eslint.config.mjs<br/>no-restricted-imports and -syntax"]:::changed
+    rule["scripts/rules comment-content<br/>guard rows for the two rules"]:::changed
+    tests["effects.test.tsx<br/>no-effects.test.ts"]:::new
+    docs["docs/development.md<br/>cheat sheet"]:::new
+  end
+
+  editor --> request
+  editor --> interval
+  editor --> controller
+  editor --> listener
+  editor --> check
+  posts --> request
+  crepe --> widget
+  crepe --> latest
+  modal --> focus
+  check --> request
+  check --> latest
+  controller --> autosave
+  editor --> api
+  posts --> api
+  check --> api
+  request --> latest
+  listener --> latest
+  interval --> latest
+  controller --> latest
+  widget --> latest
+  lint -. "exempts" .-> effects
+  lint -. "rejects effect hooks in" .-> components
+  rule -. "fails a disable of" .-> lint
+  tests --> effects
+  tests --> lint
+
+  subgraph legend["Legend"]
+    l1["new"]:::new
+    l2["changed"]:::changed
+    l3["unchanged"]:::unchanged
+  end
