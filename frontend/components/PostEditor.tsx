@@ -78,8 +78,13 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const autosave = useRef<ReturnType<typeof createAutosave> | null>(null);
   const running = useRef(false); // saveAll() in progress: a second click sends nothing
   const editor = useRef<EditorHandle | null>(null);
+  const pendingJump = useRef<{ line: number; markdown: string } | null>(null);
   const setEditor = useCallback((handle: EditorHandle | null) => {
     editor.current = handle;
+    if (handle === null || pendingJump.current === null) return;
+    const { line, markdown } = pendingJump.current;
+    pendingJump.current = null;
+    setJumpMiss(handle.jumpToLine(line, markdown) ? null : line);
   }, []);
 
   // A freshly loaded post: every field and both ETags.
@@ -321,7 +326,14 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   function jumpTo(line: number) {
     setSheet(null);
     setView("edit");
-    requestAnimationFrame(() => setJumpMiss(editor.current?.jumpToLine(line, saved!.body) ? null : line));
+    const markdown = saved!.body;
+    requestAnimationFrame(() => {
+      if (editor.current === null) {
+        pendingJump.current = { line, markdown };
+        return;
+      }
+      setJumpMiss(editor.current.jumpToLine(line, markdown) ? null : line);
+    });
   }
 
   return (

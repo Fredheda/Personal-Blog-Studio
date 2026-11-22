@@ -22,6 +22,7 @@ function render(ui: ReactElement) {
 
 // The real editor is covered in CrepeEditor.test.tsx; here a textarea stands in.
 const jumpToLine = vi.hoisted(() => vi.fn<(line: number, markdown: string) => boolean>(() => true));
+const editorDelay = vi.hoisted(() => ({ ms: 0 }));
 
 vi.mock("./CrepeEditor", () => ({
   CrepeEditor: ({
@@ -34,8 +35,11 @@ vi.mock("./CrepeEditor", () => ({
     onReady?: (handle: { jumpToLine: (line: number, markdown: string) => boolean } | null) => void;
   }) => {
     useEffect(() => {
-      onReady?.({ jumpToLine });
-      return () => onReady?.(null);
+      const timer = setTimeout(() => onReady?.({ jumpToLine }), editorDelay.ms);
+      return () => {
+        clearTimeout(timer);
+        onReady?.(null);
+      };
     }, [onReady]);
     return <textarea aria-label="Body (Markdown)" defaultValue={initial} onChange={(e) => onChange(e.target.value)} />;
   },
@@ -46,6 +50,7 @@ afterEach(() => {
   vi.useRealTimers();
   jumpToLine.mockReset();
   jumpToLine.mockReturnValue(true);
+  editorDelay.ms = 0;
 });
 
 const draft: Draft = {
@@ -659,6 +664,16 @@ test("a problem card with a line jumps the editor to that line in the saved text
   fireEvent.click(await within(lane()).findByRole("button", { name: /Line 3/ }));
   await waitFor(() => expect(jumpToLine).toHaveBeenCalledWith(3, draft.body));
   expect(within(lane()).queryByRole("button", { name: /Slug is required/ })).toBeNull();
+});
+
+test("a jump asked before the editor is ready runs as soon as it is, without a miss strip", async () => {
+  editorDelay.ms = 80;
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: rawHtml })} />);
+  await loaded();
+  fireEvent.click(await within(lane()).findByRole("button", { name: /Line 3/ }));
+  expect(jumpToLine).not.toHaveBeenCalled();
+  await waitFor(() => expect(jumpToLine).toHaveBeenCalledWith(3, draft.body));
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 
 test("when the editor cannot find the line the strip says so, and the next edit clears it", async () => {
