@@ -6,7 +6,7 @@ import { API_ORIGIN } from "./ports.ts";
 // real rules: the custom header on every write and the ETag in If-Match.
 const HEADERS = { "x-blog-studio": "1" };
 
-type Seed = { title: string; slug?: string; summary?: string; body?: string; publish?: boolean };
+type Seed = { title: string; slug?: string; summary?: string; tags?: string[]; body?: string; publish?: boolean };
 
 const unique = (label: string) => `${label} ${Math.random().toString(36).slice(2, 8)}`;
 
@@ -20,11 +20,11 @@ async function createPost(request: APIRequestContext, seed: Seed): Promise<{ pos
     await must(await request.post(`${API_ORIGIN}/posts`, { headers: HEADERS, data: { title: seed.title } }))
   ).json();
   const id: string = created.postId;
-  if (seed.slug || seed.summary) {
+  if (seed.slug || seed.summary || seed.tags) {
     await must(
       await request.patch(`${API_ORIGIN}/posts/${id}/meta`, {
         headers: { ...HEADERS, "if-match": created.metaEtag },
-        data: { slug: seed.slug, summary: seed.summary },
+        data: { slug: seed.slug, summary: seed.summary, tags: seed.tags },
       }),
     );
   }
@@ -48,7 +48,10 @@ async function createPost(request: APIRequestContext, seed: Seed): Promise<{ pos
   return { postId: id };
 }
 
-async function stored(request: APIRequestContext, id: string): Promise<{ title: string; body: string }> {
+async function stored(
+  request: APIRequestContext,
+  id: string,
+): Promise<{ title: string; summary: string; slug: string; tags: string[]; body: string }> {
   return (await must(await request.get(`${API_ORIGIN}/posts/${id}`))).json();
 }
 
@@ -61,6 +64,83 @@ test("creating a post opens its editor and the API holds the title", async ({ pa
   await expect(page.getByLabel("Title")).toHaveValue(title);
   const id = new URL(page.url()).pathname.split("/").pop() as string;
   expect((await stored(request, id)).title).toBe(title);
+});
+
+test("the title, summary, slug and tags are typed in the page and saved with Save", async ({ page, request }) => {
+  const { postId } = await createPost(request, { title: unique("Details") });
+  await page.goto(`/posts/${postId}`);
+  const title = unique("Typed heading");
+  await page.getByLabel("Title").fill(title);
+  await page.getByRole("textbox", { name: "Summary" }).fill("A short summary.");
+  await page.getByRole("button", { name: "Add a slug" }).click();
+  const slugText = `typed-${Math.random().toString(36).slice(2, 8)}`;
+  await page.getByLabel("Slug").fill(slugText.toUpperCase());
+  await page.getByLabel("Slug").press("Enter");
+  await expect(page.getByRole("button", { name: `/${slugText}` })).toBeVisible();
+  await page.getByRole("button", { name: "Add a tag" }).click();
+  await page.getByLabel("Tags").fill("maths, physics, extra,");
+  await page.getByLabel("Tags").press("Backspace");
+  await expect(page.getByRole("button", { name: "Remove tag extra" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Remove tag maths" }).click();
+  await page.getByRole("button", { name: "Add a tag" }).click();
+  await page.getByLabel("Tags").fill("chemistry");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("banner").getByText(/^Saved/)).toBeVisible();
+  await expect
+    .poll(async () => {
+      const post = await stored(request, postId);
+      return [post.title, post.summary, post.slug, post.tags];
+    })
+    .toEqual([title, "A short summary.", slugText, ["physics", "chemistry"]]);
+  await page.reload();
+  await expect(page.getByLabel("Title")).toHaveValue(title);
+  await expect(page.getByRole("textbox", { name: "Summary" })).toHaveValue("A short summary.");
+  await expect(page.getByRole("button", { name: `/${slugText}` })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove tag physics" })).toBeVisible();
+});
+
+test("the slug of a post that has been published is read only with a lock", async ({ page, request }) => {
+  const slugText = `live-${Math.random().toString(36).slice(2, 8)}`;
+  const { postId } = await createPost(request, {
+    title: unique("Locked"),
+    slug: slugText,
+    summary: "Sum",
+    body: "Hello.",
+    publish: true,
+  });
+  await page.goto(`/posts/${postId}`);
+  const pill = page.getByTitle("The slug is fixed once the post has been published");
+  await expect(pill).toContainText(`/${slugText}`);
+  await pill.click();
+  await expect(page.getByLabel("Slug")).toHaveCount(0);
+});
+
+test("the Preview shows the details as plain text with no controls", async ({ page, request }) => {
+  const title = unique("Plain");
+  const { postId } = await createPost(request, { title, slug: `plain-${Math.random().toString(36).slice(2, 8)}`, summary: "Only text.", tags: ["maths"], body: "Text." });
+  await page.goto(`/posts/${postId}`);
+  await page.getByRole("banner").getByRole("button", { name: "Preview" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect(page.getByText("Only text.")).toBeVisible();
+  await expect(page.getByLabel("Title")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add a tag" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remove tag maths" })).toHaveCount(0);
+});
+
+test("on a phone the details and their pills fit the width and wrap", async ({ page, request }) => {
+  const { postId } = await createPost(request, {
+    title: unique("Phone details"),
+    slug: "a-fairly-long-slug-for-a-phone-screen",
+    tags: ["first-tag", "second-tag", "third-tag", "fourth-tag"],
+    body: "Text.",
+  });
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`/posts/${postId}`);
+  await expect(page.getByRole("button", { name: "Add a tag" })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  const tag = await page.getByRole("button", { name: "Add a tag" }).boundingBox();
+  expect(tag !== null && tag.x + tag.width <= 390).toBeTruthy();
 });
 
 test("typing in the editor autosaves the text through the real ETag flow", async ({ page, request }) => {

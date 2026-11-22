@@ -24,6 +24,7 @@ import { Button } from "./Button";
 import { Dialog } from "./Dialog";
 import { MessageStrip } from "./MessageStrip";
 import type { EditorHandle } from "./CrepeEditor";
+import { PostDetails } from "./PostDetails";
 import { Preview } from "./Preview";
 import { ProblemList } from "./ProblemList";
 import { Sheet } from "./Sheet";
@@ -41,10 +42,6 @@ const REFUSED = "Not published: fix the problems listed under Check.";
 
 const toApiError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(0, null));
 
-function splitTags(text: string): string[] {
-  return text.split(",").map((t) => t.trim()).filter((t) => t !== "");
-}
-
 export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const client = useMemo(() => api ?? createStudioApi(), [api]);
   const slot = useTopBarSlot();
@@ -52,7 +49,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [summary, setSummary] = useState("");
-  const [tags, setTags] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [body, setBody] = useState("");
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [status, setStatus] = useState<AutosaveStatus>("idle");
@@ -63,20 +60,18 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [publishing, setPublishing] = useState(false);
   const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [saves, setSaves] = useState(0); // every successful save and every reload: the check asks again
+  const [saves, setSaves] = useState(0);
   const [refusal, setRefusal] = useState<{ problems: CheckProblem[]; at: number } | null>(null);
   const [askUnpublish, setAskUnpublish] = useState(false);
   const [sheet, setSheet] = useState<"check" | "publish" | null>(null);
   const [jumpMiss, setJumpMiss] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  // The ETags live in refs: the save callback updates the body's before it
-  // resolves, so two saves in a row never send a stale one, and the check hook
-  // compares its answer with the current pair.
+  // The ETags live in refs so two saves in a row never send a stale one.
   const bodyEtag = useRef("");
   const metaEtag = useRef("");
   const autosave = useRef<ReturnType<typeof createAutosave> | null>(null);
-  const running = useRef(false); // saveAll() in progress: a second click sends nothing
+  const running = useRef(false);
   const editor = useRef<EditorHandle | null>(null);
   const pendingJump = useRef<{ line: number; markdown: string } | null>(null);
   const setEditor = useCallback((handle: EditorHandle | null) => {
@@ -92,7 +87,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setTitle(draft.title);
     setSlug(draft.slug);
     setSummary(draft.summary);
-    setTags(draft.tags.join(", "));
+    setTags(draft.tags);
     setBody(draft.body);
     bodyEtag.current = draft.bodyEtag;
     metaEtag.current = draft.metaEtag;
@@ -121,7 +116,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setTitle(draft.title);
     setSlug(draft.slug);
     setSummary(draft.summary);
-    setTags(draft.tags.join(", "));
+    setTags(draft.tags);
   }
 
   useEffect(() => {
@@ -135,14 +130,11 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     };
   }, [client, id, reloadKey]);
 
-  // Display only: keeps "Saved 2 min ago" current. Saving never runs on a timer.
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
 
-  // One body autosave per loaded post. Leaving flushes first and stops only
-  // after the flush settles, so text typed during a save is not lost.
   useEffect(() => {
     // `alive` goes false in the cleanup, before the closing flush runs: that
     // flush still sends the text, but its late answer must not touch the
@@ -158,7 +150,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         try {
           const next = await client.saveBody(id, text, bodyEtag.current);
           if (alive) {
-            bodyEtag.current = next.bodyEtag; // before this resolves
+            bodyEtag.current = next.bodyEtag;
             setSaved((previous) =>
               previous === null ? previous : { ...previous, body: text, bodyEtag: next.bodyEtag, updatedAt: next.updatedAt },
             );
@@ -166,7 +158,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
             setSaves((n) => n + 1);
           }
         } catch (e) {
-          if (alive) setBodyError(toApiError(e)); // the reason must reach the screen
+          if (alive) setBodyError(toApiError(e));
           throw e;
         }
       },
@@ -189,7 +181,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const detailsUnsaved =
     saved !== null &&
     (title !== saved.title || slug !== saved.slug || summary !== saved.summary ||
-      splitTags(tags).join(",") !== saved.tags.join(","));
+      tags.join(",") !== saved.tags.join(","));
 
   useEffect(() => {
     const unsaved =
@@ -212,14 +204,13 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   }
   if (saved === null) return <p className="px-6 pt-10">Loading…</p>;
 
-  const metaDirty = detailsUnsaved;
   const bodyUnsaved = status === "pending" || status === "saving" || status === "error";
   const conflict = status === "conflict" || error?.status === 412 || bodyError?.status === 412;
   const kind = saveKind({
     conflict,
     bodyFailed: status === "error",
     saving: busy || status === "saving",
-    detailsUnsaved: metaDirty,
+    detailsUnsaved,
     bodyPending: status === "pending",
   });
   const ago = relativeTime(saved.updatedAt, now);
@@ -230,10 +221,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const checkView = checkStep(kind, checkState);
   const publishView = publishStep(saved, kind, checkState);
 
-  /** Saves everything that is unsaved: the details first (details ETag), then
-   *  the body (body ETag, through the autosave controller). True only when both
-   *  halves are saved. A details failure is shown, but the body is still
-   *  flushed so typed text is stored before the owner reloads. */
   async function saveAll(): Promise<boolean> {
     if (running.current) return false;
     running.current = true;
@@ -241,9 +228,9 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setNotice("");
     let ok = true;
     try {
-      if (metaDirty) {
+      if (detailsUnsaved) {
         try {
-          const next = await client.patchMeta(id, { title, slug, summary, tags: splitTags(tags) }, saved!.metaEtag);
+          const next = await client.patchMeta(id, { title, slug, summary, tags }, saved!.metaEtag);
           adoptDetails(next);
           setError(null);
           setSaves((n) => n + 1);
@@ -261,7 +248,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     return ok;
   }
 
-  /** The status fields (published, version, dates) of the post as the API has them now; never the text. */
   async function refreshStatus() {
     try {
       const fresh = await client.getPost(id);
@@ -371,7 +357,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
                   setBodyError(null);
                   setRefusal(null);
                   setStatus("idle");
-                  setSaved(null); // the editor remounts with the reloaded text
+                  setSaved(null);
                   setSaves((n) => n + 1);
                   setReloadKey((k) => k + 1);
                 }}
@@ -389,16 +375,18 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         {notice && <MessageStrip kind="success">{notice}</MessageStrip>}
         {jumpMiss !== null && <MessageStrip kind="error">Could not find line {jumpMiss} in the editor.</MessageStrip>}
 
-        <h1>{saved.title || "(untitled)"}</h1>
-
-        <label htmlFor="title">Title</label>
-        <input id="title" value={title} maxLength={200} onChange={(e) => { setTitle(e.target.value); edited(); }} />
-        <label htmlFor="slug">Slug</label>
-        <input id="slug" value={slug} onChange={(e) => { setSlug(e.target.value); edited(); }} />
-        <label htmlFor="summary">Summary</label>
-        <textarea id="summary" style={{ minHeight: "4rem" }} value={summary} maxLength={500} onChange={(e) => { setSummary(e.target.value); edited(); }} />
-        <label htmlFor="tags">Tags (comma separated, optional)</label>
-        <input id="tags" value={tags} onChange={(e) => { setTags(e.target.value); edited(); }} />
+        <PostDetails
+          title={title}
+          summary={summary}
+          slug={slug}
+          tags={tags}
+          slugLocked={saved.slugLocked}
+          preview={view === "preview"}
+          onTitle={(value) => { setTitle(value); edited(); }}
+          onSummary={(value) => { setSummary(value); edited(); }}
+          onSlug={(value) => { setSlug(value); edited(); }}
+          onTags={(value) => { setTags(value); edited(); }}
+        />
 
         <div className="mt-4" hidden={view !== "edit"}>
           <CrepeEditor
