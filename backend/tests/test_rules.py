@@ -1,3 +1,6 @@
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pr_size
@@ -132,3 +135,99 @@ def test_ordinary_files_pass():
 def test_added_and_renamed_to_paths_are_read_from_name_status():
     rows = "A\tx.md\nM\ty.md\nD\tz.md\nR100\told.md\tdocs/shared/2026-11-22-new.md\n"
     assert spec_location.added_paths(rows) == ["x.md", "docs/shared/2026-11-22-new.md"]
+
+
+def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
+    shutil.copytree(RULES, tmp_path / "scripts" / "rules", ignore=shutil.ignore_patterns("__pycache__"))
+    (tmp_path / "scripts" / "rules" / "shared-block.sha256").write_text(RECORDED + "\n")
+    (tmp_path / "AGENTS.md").write_text(agents)
+    for step in (
+        ["init", "-q", "-b", "main"],
+        ["add", "-A"],
+        ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"],
+    ):
+        subprocess.run(["git", *step], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+def commit_all(repo: Path) -> None:
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "change"],
+        cwd=repo,
+        check=True,
+    )
+
+
+def run_rules(repo: Path) -> subprocess.CompletedProcess:
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD~1"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    env = {k: v for k, v in os.environ.items() if k not in ("PR_NUMBER", "GITHUB_REPOSITORY")}
+    return subprocess.run(
+        ["bash", "scripts/rules/run.sh"],
+        cwd=repo,
+        env={**env, "BASE_SHA": base},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_a_clean_change_passes_every_rule(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "src.py").write_text("x = 1\n")
+    commit_all(repo)
+    result = run_rules(repo)
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == [
+        "pr-size: ok (1 files, 1 lines)",
+        "spec-location: ok",
+        "shared-block: ok",
+    ]
+
+
+def test_an_oversized_change_fails_pr_size_only(tmp_path):
+    repo = make_repo(tmp_path)
+    for i in range(26):
+        (repo / f"f{i}.py").write_text("x = 1\n")
+    commit_all(repo)
+    result = run_rules(repo)
+    assert result.returncode == 1
+    assert "pr-size: FAIL 26 files" in result.stdout
+    assert "spec-location: ok" in result.stdout
+    assert "shared-block: ok" in result.stdout
+
+
+def test_a_spec_in_the_wrong_place_fails_spec_location_only(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "notes").mkdir()
+    (repo / "notes" / "2026-11-22-idea.md").write_text("# idea\n")
+    commit_all(repo)
+    result = run_rules(repo)
+    assert result.returncode == 1
+    assert "spec-location: FAIL" in result.stdout
+    assert "  notes/2026-11-22-idea.md" in result.stdout
+    assert "pr-size: ok" in result.stdout
+
+
+def test_an_edited_shared_block_fails_shared_block_only(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "AGENTS.md").write_text((FIXTURES / "agents-block-edited.md").read_text())
+    commit_all(repo)
+    result = run_rules(repo)
+    assert result.returncode == 1
+    assert "shared-block: FAIL" in result.stdout
+    assert "spec-location: ok" in result.stdout
+
+
+def test_a_block_and_its_hash_changed_together_are_flagged(tmp_path):
+    repo = make_repo(tmp_path)
+    edited = (FIXTURES / "agents-block-edited.md").read_text()
+    (repo / "AGENTS.md").write_text(edited)
+    (repo / "scripts" / "rules" / "shared-block.sha256").write_text(
+        shared_block.digest(shared_block.extract(edited)) + "\n"
+    )
+    commit_all(repo)
+    result = run_rules(repo)
+    assert result.returncode == 0
+    assert "shared-block: ok (hash file changed in this PR)" in result.stdout
