@@ -2,7 +2,7 @@
 
 > **For agentic workers:** use `superpowers:executing-plans` (inline). Steps use checkbox syntax; flip each box when the step is done.
 
-**Status:** proposed. Spec: `docs/specs/2026-11-22-no-use-effect.md`. Ticket: BLOG-61. Run it after BLOG-39 merged and before BLOG-40 (all three edit `PostEditor.tsx`, never in parallel). The edits below name each effect by what it does; if BLOG-39 moved the surrounding code, apply the same replacement to the same effect and re-run the tests.
+**Status:** done (PR #81). Spec: `docs/specs/2026-11-22-no-use-effect.md`. Ticket: BLOG-61. Run it after BLOG-39 merged and before BLOG-40 (all three edit `PostEditor.tsx`, never in parallel). The edits below name each effect by what it does; if BLOG-39 moved the surrounding code, apply the same replacement to the same effect and re-run the tests.
 
 ## TL;DR
 
