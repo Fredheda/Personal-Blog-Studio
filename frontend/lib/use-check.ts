@@ -14,12 +14,7 @@ type Args = {
   current: () => { bodyEtag: string; metaEtag: string };
 };
 
-/** What publish would refuse on for the saved post (spec 7.5). Asks when the
- *  post has loaded and again whenever `saves` changes (every successful save,
- *  a reload). Until the answer for the current `saves` arrives the state is
- *  `running`. An answer whose ETags are not the current ones is dropped; if
- *  no save follows (the post changed in another tab, then a details Save
- *  here), the state stays `running` until the next edit raises the conflict. */
+/** Answers whose ETags are not current are dropped, so the state can stay `running`. */
 export function useCheck({ api, id, ready, saves, current }: Args): CheckState {
   const [answer, setAnswer] = useState<{ at: number; state: CheckState } | null>(null);
   const latest = useLatest(current);

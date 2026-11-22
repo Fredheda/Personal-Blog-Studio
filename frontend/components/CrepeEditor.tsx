@@ -1,9 +1,6 @@
 "use client";
 
-// The theme's own `common/style.css` also pulls in `common/latex.css`, which
-// imports KaTeX's stylesheet and with it eight font families. Maths is MathML
-// only here, so the parts are imported one by one, without latex.css, and the
-// two rules the maths editing popup needs live in app/globals.css.
+// Theme parts are imported one by one: common/latex.css would pull in KaTeX's fonts.
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -43,10 +40,7 @@ function placeCaret(editor: HTMLElement, block: Element) {
   block.scrollIntoView?.({ block: "center" });
 }
 
-/** Milkdown Crepe as a Markdown editor. `initial` is read once, at mount: the
- *  parent remounts it with a new `key` to replace the text (reload). Nothing is
- *  reported until the owner changes the text: whatever Crepe makes of the loaded
- *  Markdown is taken as the baseline, so opening a post never writes it. */
+/** `initial` is read once, at mount; nothing is reported until the text changes. */
 export function CrepeEditor({ initial, onChange, onReady }: Props) {
   const latestOnChange = useLatest(onChange);
   const latestOnReady = useLatest(onReady);
