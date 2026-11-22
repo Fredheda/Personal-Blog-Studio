@@ -134,7 +134,7 @@ jobs:
 
   # Browser tests: Playwright drives the production build in Chromium against
   # the real studio API on Azurite (no Azure). A draft PR skips it; see
-  # CLAUDE.md, "Browser tests".
+  # AGENTS.md, "Browser tests".
   frontend-e2e:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
