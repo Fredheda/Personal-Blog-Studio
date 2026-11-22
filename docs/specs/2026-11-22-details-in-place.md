@@ -22,6 +22,7 @@ The post page is the post. Today a form of four labelled fields sits above the e
 
 - No change to the studio API, the proxy, the save logic, the ETags or the autosave.
 - No tag suggestions, no tag list across posts, no slug generated from the title.
+- No filter on what a tag may contain: the server's tag rule still decides at Save and shows its refusal, as it did for the old field. Filtering tags like the slug is a follow-up if the owner wants it.
 - No steps lane change and no drafts lane (BLOG-40).
 - No effect hooks: the new component holds only local state, so it needs nothing from the effects folder planned in BLOG-61.
 

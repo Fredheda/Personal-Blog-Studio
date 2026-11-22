@@ -727,7 +727,7 @@ with
 - delete the line `  /** The status fields (published, version, dates) of the post as the API has them now; never the text. */`
 - replace the three-line comment starting `  // The ETags live in refs: the save callback updates the body's before it` with the single line `  // The ETags live in refs so two saves in a row never send a stale one.`
 
-- [ ] **Step 4:** `bash scripts/rules/run.sh`. Expected: six ok lines (`comment-count: ok (34 -> 19)`). Then `cd frontend && npx vitest run && npm run lint && npx tsc --noEmit` green.
+- [ ] **Step 4:** `bash scripts/rules/run.sh`. Expected: six ok lines (`comment-count: ok (34 -> 19)`: the totals over all touched files; `PostEditor.tsx` accounts for 24 -> 9). Then `cd frontend && npx vitest run && npm run lint && npx tsc --noEmit` green.
 - [ ] **Step 5:** `git add AGENTS.md && git commit -m "Document the details in the page"`, then `git add frontend && git commit -m "Cut comments that restate the code in PostEditor"`.
 
 ### Task 8: Verify, hand over
