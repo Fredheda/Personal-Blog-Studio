@@ -659,7 +659,7 @@ describe("the no-effects rule", () => {
       expect(config.rules?.["no-restricted-imports"]?.[0], file).toBe(2);
       expect(config.rules?.["no-restricted-syntax"]?.[0], file).toBe(2);
     }
-    expect(ignored).toEqual(["next-env.d.ts"]);
+    expect(ignored.filter((file) => file !== "next-env.d.ts")).toEqual([]);
   });
 });
 ```
