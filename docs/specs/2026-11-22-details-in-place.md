@@ -1,7 +1,7 @@
 # Details typed in place: title, summary, slug and tags in the page
 
 - **Ticket:** BLOG-39. Parent design: studio design spec sections 7.4 and 10 (approved 2026-11-15, BLOG-32; workspace `docs/Personal-Blog-Studio/specs/2026-11-15-studio-design.md`). The behaviour that matters is restated below, so this spec stands alone.
-- **Status:** proposed. Plan: `docs/plans/2026-11-22-details-in-place.md`.
+- **Status:** done (PR #78). Plan: `docs/plans/2026-11-22-details-in-place.md`.
 
 ## Intent
 

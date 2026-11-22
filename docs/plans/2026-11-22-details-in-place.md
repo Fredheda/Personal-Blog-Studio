@@ -2,7 +2,7 @@
 
 > **For agentic workers:** use `superpowers:executing-plans` (inline). Steps use checkbox syntax; flip each box when the step is done.
 
-**Status:** proposed. Spec: `docs/specs/2026-11-22-details-in-place.md`. Ticket: BLOG-39. Runs before the BLOG-61 code PR and BLOG-40 (all three edit `PostEditor.tsx`, never in parallel). The edits below name each piece by what it does; if the surrounding code moved, re-read the file and apply the same replacement.
+**Status:** done (PR #78). Spec: `docs/specs/2026-11-22-details-in-place.md`. Ticket: BLOG-39. Runs before the BLOG-61 code PR and BLOG-40 (all three edit `PostEditor.tsx`, never in parallel). The edits below name each piece by what it does; if the surrounding code moved, re-read the file and apply the same replacement.
 
 ## TL;DR
 
