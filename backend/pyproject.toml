@@ -27,7 +27,7 @@ pyright = "1.1.414"
 jsonschema = "4.26.0"
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "../scripts/rules"]
 testpaths = ["tests"]
 
 [tool.ruff]
