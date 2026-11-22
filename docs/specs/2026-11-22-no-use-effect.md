@@ -18,7 +18,7 @@ Most effects in a component either compute something that can be derived, or rea
 
 ## Non-goals
 
-- No data-loading library and no React 19-only primitive: the hooks keep the exact semantics of the effects they replace. A library for the two request sites is a separate decision.
+- No data-loading library: a library for the two request sites is a separate decision. The hooks keep the semantics of the effects they replace, with one difference: `useWidget` is a ref callback with a cleanup, which needs React 19 (the version here), and it mounts when the node attaches, during the commit, where the effect ran after paint.
 - No change to what a user sees or to the API.
 
 ## The hooks

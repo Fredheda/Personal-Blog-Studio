@@ -7,7 +7,7 @@
 ## TL;DR
 
 - Ships one PR: seven small hooks in `frontend/effects/` with tests, the eleven uses in six files moved onto them, an ESLint rule that rejects every effect hook outside that folder, a guard against switching the rule off, and the cheat sheet in `docs/development.md`.
-- Behaviour is unchanged, the editor autosave life cycle included. Proof: the 314 existing frontend tests and the 19 browser tests stay green on the migrated code; the prototype of this plan passed both (337 frontend tests with the new ones, 19 browser tests, lint, types, build).
+- Behaviour is unchanged, the editor autosave life cycle included. Proof: the 314 existing frontend tests and the 19 browser tests stay green on the migrated code; the prototype of this plan passed both (346 frontend tests with the new ones, 19 browser tests, lint, types, build).
 - No new dependency, no workflow change, no new Azure resource. The PR touches no `.github` file and changes behaviour-free code, but it is a feature-class PR: the owner gets the local-run-or-merge choice.
 - Cost: none.
 - The long effect comments in `PostEditor.tsx`, `CrepeEditor.tsx` and `use-check.ts` go in a separate cleanup commit (the floor and the content rule apply to touched files).
@@ -160,10 +160,10 @@ describe("useRequest", () => {
     expect(onResult).toHaveBeenCalledWith("a");
   });
 
-  it("drops the answer of a request whose key has changed or whose owner unmounted", async () => {
+  it("drops the answer of a request whose key has changed", async () => {
     const slow = deferred<string>();
     const onResult = vi.fn();
-    const { rerender, unmount } = renderHook(
+    const { rerender } = renderHook(
       ({ key }) =>
         useRequest(() => (key === "old" ? slow.promise : Promise.resolve("new")), key, {
           onResult,
@@ -175,7 +175,34 @@ describe("useRequest", () => {
     slow.resolve("stale");
     await act(async () => {});
     expect(onResult.mock.calls).toEqual([["new"]]);
+  });
+
+  it("drops the answer of a request whose owner unmounted", async () => {
+    const slow = deferred<string>();
+    const onResult = vi.fn();
+    const { unmount } = renderHook(() => useRequest(() => slow.promise, "k", { onResult }));
     unmount();
+    slow.resolve("late");
+    await act(async () => {});
+    expect(onResult).not.toHaveBeenCalled();
+  });
+
+  it("does not report a late failure of a request whose key has changed", async () => {
+    const slow = deferred<string>();
+    const onError = vi.fn();
+    const { rerender } = renderHook(
+      ({ key }) =>
+        useRequest(() => (key === "old" ? slow.promise : Promise.resolve("new")), key, {
+          onResult: vi.fn(),
+          onError,
+        }),
+      { initialProps: { key: "old" } },
+    );
+    rerender({ key: "new" });
+    await act(async () => {});
+    slow.reject(new Error("late"));
+    await act(async () => {});
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it("reports an error only while the request is current and skips a disabled one", async () => {
@@ -407,8 +434,8 @@ export function useFocusReturn(target: RefObject<HTMLElement | null>) {
 }
 ```
 
-- [ ] **Step 4:** `cd frontend && npx vitest run effects`. Expected: `10 passed`.
-- [ ] **Step 5:** mutation checks, each must turn at least one test red, then restore: (a) in `useRequest` delete `if (alive)` before `onResult`; (b) in `useController` delete `alive = false;`; (c) in `useInterval` replace `ms === null` by `false`; (d) in `useWidget` return `undefined` instead of the mount result; (e) in `useWindowListener` delete the `removeEventListener`.
+- [ ] **Step 4:** `cd frontend && npx vitest run effects`. Expected: `12 passed`.
+- [ ] **Step 5:** mutation checks, each must turn at least one test red, then restore: (a) in `useRequest` delete `if (alive)` before `onResult`; (b) in `useController` delete `alive = false;`; (c) in `useInterval` replace `ms === null` by `false`; (d) in `useWidget` return `undefined` instead of the mount result; (e) in `useWindowListener` delete the `removeEventListener`; (f) in `useRequest` delete `if (alive)` before `onError`.
 - [ ] **Step 6:** `git add frontend/effects frontend/vitest.config.ts && git commit -m "Add the named effect hooks"`.
 
 ### Task 2: Move the use sites
@@ -558,6 +585,9 @@ and replace the tail (`return () => { ... };` of the old effect, the two comment
 
 ```ts
 // @vitest-environment node
+import { readdirSync } from "node:fs";
+import { join, relative } from "node:path";
+
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
@@ -566,36 +596,75 @@ const SNIPPETS = {
   "a renamed import": 'import { useEffect as run } from "react";\nrun(() => {}, []);\n',
   "a member call": 'import React from "react";\nReact.useEffect(() => {}, []);\n',
   "a computed member call": 'import React from "react";\nReact["useLayoutEffect"](() => {}, []);\n',
+  "a destructured binding": 'import React from "react";\nconst { useEffect } = React;\nuseEffect(() => {}, []);\n',
+  "a renamed destructured binding": 'import React from "react";\nconst { useEffect: run } = React;\nrun(() => {}, []);\n',
   "useLayoutEffect": 'import { useLayoutEffect } from "react";\nuseLayoutEffect(() => {}, []);\n',
   "useInsertionEffect": 'import { useInsertionEffect } from "react";\nuseInsertionEffect(() => {}, []);\n',
 };
 
+const RE_EXPORTS = {
+  "a named re-export": 'export { useEffect } from "react";\n',
+  "a star re-export": 'export * from "react";\n',
+};
+
+const eslint = new ESLint({ cwd: process.cwd() });
+
 async function ruleIds(source: string, filePath: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: process.cwd() });
   const [result] = await eslint.lintText(source, { filePath });
   return result.messages.map((message) => message.ruleId ?? "");
 }
 
+function restricted(ids: string[]): boolean {
+  return ids.includes("no-restricted-imports") || ids.includes("no-restricted-syntax");
+}
+
+function sources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (["node_modules", ".next", "effects"].includes(entry.name)) return [];
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sources(path);
+    return /\.(ts|tsx)$/.test(entry.name) ? [path] : [];
+  });
+}
+
 describe("the no-effects rule", () => {
   it.each(Object.entries(SNIPPETS))("rejects %s outside the effects folder", async (_name, source) => {
-    const ids = await ruleIds(source, "components/Sample.tsx");
-    expect(ids.some((id) => id === "no-restricted-imports" || id === "no-restricted-syntax")).toBe(true);
+    expect(restricted(await ruleIds(source, "components/Sample.tsx"))).toBe(true);
   });
 
   it.each(Object.entries(SNIPPETS))("allows %s inside the effects folder", async (_name, source) => {
-    const ids = await ruleIds(source, "effects/useSample.ts");
-    expect(ids).not.toContain("no-restricted-imports");
-    expect(ids).not.toContain("no-restricted-syntax");
+    expect(restricted(await ruleIds(source, "effects/useSample.ts"))).toBe(false);
   });
 
-  it("does not exempt tests", async () => {
-    const ids = await ruleIds(SNIPPETS["a named import"], "components/Sample.test.tsx");
-    expect(ids).toContain("no-restricted-imports");
+  it.each(Object.entries(RE_EXPORTS))("rejects %s inside the effects folder", async (_name, source) => {
+    expect(restricted(await ruleIds(source, "effects/useSample.ts"))).toBe(true);
+  });
+
+  it("does not exempt tests or a nested folder of the same name", async () => {
+    const source = SNIPPETS["a named import"];
+    expect(restricted(await ruleIds(source, "components/Sample.test.tsx"))).toBe(true);
+    expect(restricted(await ruleIds(source, "components/effects/useSample.ts"))).toBe(true);
+  });
+
+  it("applies both rules at error level to every source file outside the effects folder", async () => {
+    const files = sources(process.cwd()).map((path) => relative(process.cwd(), path));
+    expect(files.length).toBeGreaterThan(20);
+    const ignored: string[] = [];
+    for (const file of files) {
+      const config = await eslint.calculateConfigForFile(file);
+      if (config === undefined) {
+        ignored.push(file);
+        continue;
+      }
+      expect(config.rules?.["no-restricted-imports"]?.[0], file).toBe(2);
+      expect(config.rules?.["no-restricted-syntax"]?.[0], file).toBe(2);
+    }
+    expect(ignored).toEqual(["next-env.d.ts"]);
   });
 });
 ```
 
-- [ ] **Step 2:** `cd frontend && npx vitest run tests/no-effects.test.ts`. Expected: `7 failed | 6 passed` (red).
+- [ ] **Step 2:** `cd frontend && npx vitest run tests/no-effects.test.ts`. Expected: the rejects tests, the re-export tests, the nested-folder test and the walk test fail (red); the allows tests pass.
 - [ ] **Step 3:** replace the whole of `frontend/eslint.config.mjs` with:
 
 ```js
@@ -606,6 +675,7 @@ import nextTs from "eslint-config-next/typescript";
 const EFFECTS = ["useEffect", "useLayoutEffect", "useInsertionEffect"];
 const NO_EFFECTS =
   "No effects in components: use a hook from frontend/effects, or derive the value, use an event handler or a key.";
+const NO_REEXPORT = "The effects folder must not re-export from react: export a named hook instead.";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -630,12 +700,31 @@ const eslintConfig = defineConfig([
           selector: "MemberExpression[property.value=/^use(Layout|Insertion)?Effect$/]",
           message: NO_EFFECTS,
         },
+        {
+          selector: "ObjectPattern > Property[key.name=/^use(Layout|Insertion)?Effect$/]",
+          message: NO_EFFECTS,
+        },
+        {
+          selector: "ObjectPattern > Property[key.value=/^use(Layout|Insertion)?Effect$/]",
+          message: NO_EFFECTS,
+        },
       ],
     },
   },
   {
     files: ["effects/**"],
-    rules: { "no-restricted-imports": "off", "no-restricted-syntax": "off" },
+    rules: {
+      "no-restricted-imports": "off",
+      "no-restricted-syntax": [
+        "error",
+        { selector: 'ExportNamedDeclaration[source.value="react"]', message: NO_REEXPORT },
+        { selector: 'ExportAllDeclaration[source.value="react"]', message: NO_REEXPORT },
+        {
+          selector: "ExportSpecifier[local.name=/^use(Layout|Insertion)?Effect$/]",
+          message: NO_REEXPORT,
+        },
+      ],
+    },
   },
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);
@@ -643,8 +732,8 @@ const eslintConfig = defineConfig([
 export default eslintConfig;
 ```
 
-- [ ] **Step 4:** `cd frontend && npx vitest run tests/no-effects.test.ts tests/lint-settings.test.ts && npm run lint`. Expected: `21 passed`; lint prints no error or warning.
-- [ ] **Step 5:** mutation checks, each must turn a test red, then restore: (a) remove `"useInsertionEffect"` from `EFFECTS`; (b) change `files: ["effects/**"]` to `files: ["effects2/**"]`; (c) delete the second `no-restricted-syntax` selector.
+- [ ] **Step 4:** `cd frontend && npx vitest run tests/no-effects.test.ts tests/lint-settings.test.ts && npm run lint`. Expected: `28 passed` (20 here, 8 in `lint-settings.test.ts`); lint prints no error or warning.
+- [ ] **Step 5:** mutation checks, each must turn a test red, then restore: (a) remove `"useInsertionEffect"` from `EFFECTS`; (b) change `files: ["effects/**"]` to `files: ["effects2/**"]`; (c) delete the second `no-restricted-syntax` selector; (d) delete the two `ObjectPattern` selectors; (e) delete the three `export` selectors of the folder block.
 - [ ] **Step 6:** `git add frontend && git commit -m "Reject effect hooks outside the effects folder"`.
 
 ### Task 4: The guard
@@ -658,17 +747,18 @@ export default eslintConfig;
         ("web/a.ts", "/* eslint-disable no-restricted-syntax */\nexport {};\n"),
         ("web/a.ts", '/* eslint no-restricted-syntax: "off" */\nexport {};\n'),
         ("web/a.ts", "/* eslint no-restricted-imports: 0 */\nexport {};\n"),
+        ("web/a.ts", "/* eslint-disable\nno-restricted-imports */\nexport {};\n"),
 ```
 
-- [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py -q`. Expected: 4 failures (red).
-- [ ] **Step 3:** append two rows to `scripts/rules/comment-content-patterns.txt` (tab-separated, same four columns as the other rows):
+- [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py -q`. Expected: 5 failures (red).
+- [ ] **Step 3:** append two rows to `scripts/rules/comment-content-patterns.txt` (tab-separated, same four columns as the other rows; the first starts with `(?s)` so a directive written over two lines is matched, as the existing guard rows do after the separate follow-up PR):
 
 ```
-disable	ts	eslint-disable.*\bno-restricted-(imports|syntax)\b	switches off the rule on effect hooks: delete it
+disable	ts	(?s)eslint-disable.*\bno-restricted-(imports|syntax)\b	switches off the rule on effect hooks: delete it
 disable	ts	eslint\s+[^*]*\bno-restricted-(imports|syntax)\b	changes the rule on effect hooks: delete it
 ```
 
-- [ ] **Step 4:** rerun the Step 2 command. Expected: all pass. Mutation: delete the first new row, confirm the first two new parameter cases go red, restore it.
+- [ ] **Step 4:** rerun the Step 2 command. Expected: all pass. Mutation: delete the first new row, confirm the first, second and fifth new parameter cases go red, restore it; then remove `(?s)` from it and confirm the fifth case goes red.
 - [ ] **Step 5:** `git add scripts/rules backend/tests && git commit -m "Fail a directive that switches off the effect rule"`.
 
 ### Task 5: Docs
