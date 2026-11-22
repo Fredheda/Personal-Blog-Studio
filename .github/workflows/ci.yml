@@ -1,10 +1,7 @@
 name: CI
 
-# Job ids become required-check names in the `main` ruleset.
-
 on:
   pull_request:
-    # ready_for_review: the browser tests skip drafts, so marking ready must run them.
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
@@ -75,6 +72,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: backend/.python-version
       - run: scripts/rules/run.sh
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -89,8 +89,7 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Not a service container: those take no command, and Azurite needs
-      # --skipApiVersionCheck for the newer SDK. Started first, ready by pytest.
+      # Not a service container: Azurite needs --skipApiVersionCheck for the newer SDK.
       - name: Start Azurite
         run: |
           docker run -d --rm -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5 \
@@ -141,7 +140,6 @@ jobs:
       - run: npm install -g npm@12.2.2 && npm --version
       - run: npm ci
       - run: npm run lint
-      # The build writes next-env.d.ts, which tsc needs, so it runs first.
       - run: npm run build
       - run: npx tsc --noEmit
 

@@ -1,0 +1,20 @@
+python	^!
+python	^(-\*-\s*)?coding[:=]
+python	^noqa\b
+python	^type:\s*ignore
+python	^(pyright|ruff|isort|pylint|mypy):
+python	^pragma:
+python	^nosec\b
+python	^fmt:\s*(off|on|skip)
+ts	^!
+ts	^eslint-(disable|enable)
+ts	^@ts-(expect-error|ignore|nocheck|check)
+ts	^prettier-ignore
+ts	^(istanbul|v8|c8) ignore\b
+ts	^<reference
+ts	^@(vitest|jest)-environment
+ts	^[#@]\s*sourceMappingURL
+hash	^!
+hash	^shellcheck\s+(disable|enable|source|shell)=
+hash	^(syntax|escape|check)=
+hash	^yaml-language-server\b

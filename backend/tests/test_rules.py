@@ -1,23 +1,16 @@
-import os
-import shutil
-import subprocess
-from pathlib import Path
-
 import pr_size
 import shared_block
 import spec_location
 
-RULES = Path(__file__).resolve().parents[2] / "scripts" / "rules"
-FIXTURES = Path(__file__).parent / "fixtures" / "rules"
-GOOD = (FIXTURES / "agents-block-good.md").read_text()
-
-
-def present(value: str | None) -> str:
-    assert value is not None
-    return value
-
-
-RECORDED = shared_block.digest(present(shared_block.extract(GOOD)))
+from tests.rules_support import (
+    FIXTURES,
+    GOOD,
+    RECORDED,
+    commit_all,
+    make_repo,
+    present,
+    run_rules,
+)
 
 
 def test_the_block_runs_from_the_start_marker_to_the_end_marker():
@@ -58,20 +51,20 @@ def rows(count: int, lines: int = 1, path: str = "src/file{}.py") -> str:
 
 
 def test_26_files_fail():
-    assert "26 files" in present(pr_size.check(rows(26), override=False))
+    assert "26 files" in present(pr_size.check(*pr_size.measure(rows(26))))
 
 
 def test_25_files_pass():
-    assert pr_size.check(rows(25), override=False) is None
+    assert pr_size.check(*pr_size.measure(rows(25))) is None
 
 
 def test_5001_lines_fail():
-    problem = pr_size.check("5001\t0\tsrc/big.py\n", override=False)
+    problem = pr_size.check(*pr_size.measure("5001\t0\tsrc/big.py\n"))
     assert "5001 lines" in present(problem)
 
 
 def test_5000_lines_pass():
-    assert pr_size.check("2500\t2500\tsrc/big.py\n", override=False) is None
+    assert pr_size.check(*pr_size.measure("2500\t2500\tsrc/big.py\n")) is None
 
 
 def test_lockfiles_fixtures_docs_and_generated_files_do_not_count():
@@ -94,10 +87,6 @@ def test_a_rename_counts_once_at_its_new_path():
     assert pr_size.measure("0\t0\tsrc/{old => new}/x.py\n") == (1, 0)
     assert pr_size.measure("0\t0\tCLAUDE.md => AGENTS.md\n") == (1, 0)
     assert pr_size.measure("0\t0\tdocs/{a.md => b.md}\n") == (0, 0)
-
-
-def test_an_override_lifts_the_limit():
-    assert pr_size.check(rows(26), override=True) is None
 
 
 def label(event: str, actor: str, name: str = "size-override") -> dict:
@@ -154,77 +143,6 @@ def test_added_and_renamed_to_paths_are_read_from_name_status():
     assert spec_location.added_paths(rows) == ["x.md", "docs/shared/2026-11-22-new.md"]
 
 
-def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
-    shutil.copytree(
-        RULES,
-        tmp_path / "scripts" / "rules",
-        ignore=shutil.ignore_patterns("__pycache__"),
-    )
-    (tmp_path / "scripts" / "rules" / "shared-block.sha256").write_text(RECORDED + "\n")
-    (tmp_path / "AGENTS.md").write_text(agents)
-    for step in (
-        ["init", "-q", "-b", "main"],
-        ["add", "-A"],
-        [
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "-q",
-            "-m",
-            "base",
-        ],
-    ):
-        subprocess.run(["git", *step], cwd=tmp_path, check=True)
-    return tmp_path
-
-
-def commit_all(repo: Path) -> None:
-    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "-q",
-            "-m",
-            "change",
-        ],
-        cwd=repo,
-        check=True,
-    )
-
-
-def run_rules(repo: Path) -> subprocess.CompletedProcess:
-    base = subprocess.run(
-        ["git", "rev-parse", "HEAD~1"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("PR_NUMBER", "GITHUB_REPOSITORY")
-    }
-    return subprocess.run(
-        ["bash", "scripts/rules/run.sh"],
-        cwd=repo,
-        env={**env, "BASE_SHA": base},
-        capture_output=True,
-        text=True,
-    )
-
-
 def test_a_clean_change_passes_every_rule(tmp_path):
     repo = make_repo(tmp_path)
     (repo / "src.py").write_text("x = 1\n")
@@ -235,6 +153,8 @@ def test_a_clean_change_passes_every_rule(tmp_path):
         "pr-size: ok (1 files, 1 lines)",
         "spec-location: ok",
         "shared-block: ok",
+        "comment-count: ok (0 -> 0)",
+        "  src.py: 0 -> 0",
     ]
 
 

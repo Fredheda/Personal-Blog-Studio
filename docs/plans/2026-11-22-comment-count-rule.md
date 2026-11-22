@@ -2,13 +2,13 @@
 
 > **For agentic workers:** use `superpowers:executing-plans` (inline). Steps use checkbox syntax; flip each box when the step is done.
 
-**Status:** proposed. Spec: `docs/specs/2026-11-22-comment-count-rule.md`. Ticket: BLOG-60. Extends `scripts/rules/` and the `rules` job from BLOG-59 (merged, PR #69). The rules run with the repo's Python (`backend/.python-version`, set in the job): use only standard-library features present in Python 3.12 and 3.13.
+**Status:** done (PR #71). The floor of owner decision 605 A (`allowance`, `over_floor`, the allowance column) joined the rule during execution: the spec states it and `scripts/rules/` is authoritative where the code blocks below differ. Spec: `docs/specs/2026-11-22-comment-count-rule.md`. Ticket: BLOG-60. Extends `scripts/rules/` and the `rules` job from BLOG-59 (merged, PR #69). The rules run with the repo's Python (`backend/.python-version`, set in the job): use only standard-library features present in Python 3.12 and 3.13.
 
 ## TL;DR
 
 - Ships one PR: rule `comment-count` (three counters, a directives data file, the rule, wiring, tests).
 - A PR may not raise any changed file's comment lines; a line `Comments: <path>: <reason>` in the PR description lifts the failure for that one file. The job summary shows before, after and the change in percent per file and in total.
-- The floor (density cap, one-time drop or none) is an open owner question and is not built; the growth check is one small function where a floor would go.
+- The floor (owner decision 605 A: one comment line per 40 code lines, at least 2) is its own small function next to the growth check.
 - No new dependency and no new Azure resource. Owner action: merge (the PR touches `.github/workflows/ci.yml`).
 - Cost: none.
 - Every code block below ran green in a prototype before this plan was written: 50 tokenizer tests, 30 rule tests, ruff clean. The TypeScript counter also matched the TypeScript compiler's own scanner on all 75 TS and JS files of this repo (165 comment lines, no difference); Task 6 repeats that check on the final code.
@@ -62,15 +62,15 @@ flowchart TB
 
 ### Task 0: Worktree and baseline
 
-- [ ] **Step 1:** from the repo's main checkout, after the docs PR merged and `git pull --ff-only`: `git -C Personal-Blog-Studio worktree add ../.worktrees/Personal-Blog-Studio-commentcount -b feat/comment-count-rule origin/main`.
-- [ ] **Step 2:** `cd .worktrees/Personal-Blog-Studio-commentcount/backend && poetry install && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`. Expected: all pass.
-- [ ] **Step 3:** comment BLOG-60 "Starting code PR" and keep the ticket `In Progress`.
+- [x] **Step 1:** from the repo's main checkout, after the docs PR merged and `git pull --ff-only`: `git -C Personal-Blog-Studio worktree add ../.worktrees/Personal-Blog-Studio-commentcount -b feat/comment-count-rule origin/main`.
+- [x] **Step 2:** `cd .worktrees/Personal-Blog-Studio-commentcount/backend && poetry install && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`. Expected: all pass.
+- [x] **Step 3:** comment BLOG-60 "Starting code PR" and keep the ticket `In Progress`.
 
 ### Task 1: Share the test helpers
 
 **Files:** create `backend/tests/rules_support.py`; modify `backend/tests/test_rules.py`.
 
-- [ ] **Step 1:** create `backend/tests/rules_support.py`:
+- [x] **Step 1:** create `backend/tests/rules_support.py`:
 
 ```python
 import os
@@ -144,7 +144,7 @@ def run_rules(repo: Path, **extra_env: str) -> subprocess.CompletedProcess:
     )
 ```
 
-- [ ] **Step 2:** in `backend/tests/test_rules.py` replace everything from the first line through the line `RECORDED = shared_block.digest(present(shared_block.extract(GOOD)))` (imports, `RULES`, `FIXTURES`, `GOOD`, `present`, `RECORDED`) with:
+- [x] **Step 2:** in `backend/tests/test_rules.py` replace everything from the first line through the line `RECORDED = shared_block.digest(present(shared_block.extract(GOOD)))` (imports, `RULES`, `FIXTURES`, `GOOD`, `present`, `RECORDED`) with:
 
 ```python
 import pr_size
@@ -161,15 +161,15 @@ from tests.rules_support import (
 )
 ```
 
-- [ ] **Step 3:** in the same file delete the three functions `make_repo`, `commit_all`, `run_rules` (from `def make_repo` through the end of `run_rules`). Keep every `test_*` function.
-- [ ] **Step 4:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_rules.py -q`. Expected: `28 passed` (the same tests as before the move).
-- [ ] **Step 5:** `git add backend/tests && git commit -m "Share the rule test helpers"`.
+- [x] **Step 3:** in the same file delete the three functions `make_repo`, `commit_all`, `run_rules` (from `def make_repo` through the end of `run_rules`). Keep every `test_*` function.
+- [x] **Step 4:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_rules.py -q`. Expected: `28 passed` (the same tests as before the move).
+- [x] **Step 5:** `git add backend/tests && git commit -m "Share the rule test helpers"`.
 
 ### Task 2: Directives, the Python counter and the hash counter
 
 **Files:** create `scripts/rules/comment-directives.txt`, `scripts/rules/directives.py`, `scripts/rules/comment_python.py`, `scripts/rules/comment_hash.py`, `backend/tests/test_comment_tokens.py`.
 
-- [ ] **Step 1:** create `backend/tests/test_comment_tokens.py` (Python and hash cases first):
+- [x] **Step 1:** create `backend/tests/test_comment_tokens.py` (Python and hash cases first):
 
 ```python
 import comment_hash
@@ -225,8 +225,8 @@ def test_hash_counts(source, expected):
     assert comment_hash.count(source) == expected
 ```
 
-- [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py -q`. Expected: collection error `No module named 'comment_hash'` (red).
-- [ ] **Step 3:** create `scripts/rules/comment-directives.txt` (tab between the language and the regex; no blank or comment lines). Every pattern is anchored to the start of the comment text, after the comment marker and spaces:
+- [x] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py -q`. Expected: collection error `No module named 'comment_hash'` (red).
+- [x] **Step 3:** create `scripts/rules/comment-directives.txt` (tab between the language and the regex; no blank or comment lines). Every pattern is anchored to the start of the comment text, after the comment marker and spaces:
 
 ```
 python	^!
@@ -251,7 +251,7 @@ hash	^(syntax|escape|check)=
 hash	^yaml-language-server\b
 ```
 
-- [ ] **Step 4:** create `scripts/rules/directives.py`:
+- [x] **Step 4:** create `scripts/rules/directives.py`:
 
 ```python
 import re
@@ -278,7 +278,7 @@ def is_directive(text: str, language: str) -> bool:
     return any(pattern.search(body) for pattern in PATTERNS[language])
 ```
 
-- [ ] **Step 5:** create `scripts/rules/comment_python.py`:
+- [x] **Step 5:** create `scripts/rules/comment_python.py`:
 
 ```python
 import ast
@@ -308,7 +308,7 @@ def count(source: str) -> int:
     return len(lines)
 ```
 
-- [ ] **Step 6:** create `scripts/rules/comment_hash.py`:
+- [x] **Step 6:** create `scripts/rules/comment_hash.py`:
 
 ```python
 import directives
@@ -322,15 +322,15 @@ def count(source: str) -> int:
     )
 ```
 
-- [ ] **Step 7:** run the Step 2 command. Expected: `26 passed`.
-- [ ] **Step 8:** mutation checks, each must turn tests red, then restore: (a) in `comment_python.py` delete the `not` before `directives.is_directive`; (b) in `directives.py` change `MARKER.sub(...)` to leave the text unchanged (the anchored cases fail); (c) in `comment_hash.py` replace `line.lstrip().startswith("#")` by `"#" in line` (the trailing-comment case fails).
-- [ ] **Step 9:** `git add scripts/rules backend/tests && git commit -m "Count Python and hash-comment lines"`.
+- [x] **Step 7:** run the Step 2 command. Expected: `26 passed`.
+- [x] **Step 8:** mutation checks, each must turn tests red, then restore: (a) in `comment_python.py` delete the `not` before `directives.is_directive`; (b) in `directives.py` change `MARKER.sub(...)` to leave the text unchanged (the anchored cases fail); (c) in `comment_hash.py` replace `line.lstrip().startswith("#")` by `"#" in line` (the trailing-comment case fails).
+- [x] **Step 9:** `git add scripts/rules backend/tests && git commit -m "Count Python and hash-comment lines"`.
 
 ### Task 3: The TypeScript and JavaScript counter
 
 **Files:** create `scripts/rules/comment_ts.py`; modify `backend/tests/test_comment_tokens.py`.
 
-- [ ] **Step 1:** in `backend/tests/test_comment_tokens.py` change the import block to `import comment_hash\nimport comment_python\nimport comment_ts\nimport pytest` and append:
+- [x] **Step 1:** in `backend/tests/test_comment_tokens.py` change the import block to `import comment_hash\nimport comment_python\nimport comment_ts\nimport pytest` and append:
 
 ```python
 @pytest.mark.parametrize(
@@ -366,8 +366,8 @@ def test_ts_counts(source, expected):
     assert comment_ts.count(source) == expected
 ```
 
-- [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py -q`. Expected: collection error `No module named 'comment_ts'` (red).
-- [ ] **Step 3:** create `scripts/rules/comment_ts.py`:
+- [x] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py -q`. Expected: collection error `No module named 'comment_ts'` (red).
+- [x] **Step 3:** create `scripts/rules/comment_ts.py`:
 
 ```python
 import directives
@@ -516,15 +516,15 @@ def count(source: str) -> int:
     return len(lines)
 ```
 
-- [ ] **Step 4:** run the Step 2 command. Expected: `50 passed`.
-- [ ] **Step 5:** mutation checks, each must turn at least one test red, then restore: (a) in `skip_quoted` replace `source[i] != "\n"` by `True` (the JSX apostrophe case hangs or fails); (b) in the `//` branch remove the `record` call (every line-comment case fails); (c) remove `"return"` from `REGEX_KEYWORDS` (the `return /x/` case fails); (d) remove `<` from `DIVISION_BEFORE` (the JSX closing-tag cases fail).
-- [ ] **Step 6:** `git add scripts/rules backend/tests && git commit -m "Count TypeScript and JavaScript comment lines"`.
+- [x] **Step 4:** run the Step 2 command. Expected: `50 passed`.
+- [x] **Step 5:** mutation checks, each must turn at least one test red, then restore: (a) in `skip_quoted` replace `source[i] != "\n"` by `True` (the JSX apostrophe case hangs or fails); (b) in the `//` branch remove the `record` call (every line-comment case fails); (c) remove `"return"` from `REGEX_KEYWORDS` (the `return /x/` case fails); (d) remove `<` from `DIVISION_BEFORE` (the JSX closing-tag cases fail).
+- [x] **Step 6:** `git add scripts/rules backend/tests && git commit -m "Count TypeScript and JavaScript comment lines"`.
 
 ### Task 4: The rule
 
 **Files:** create `scripts/rules/comment_count.py`, `backend/tests/test_comment_count.py`; modify `scripts/rules/run.sh`, `backend/tests/test_rules.py`.
 
-- [ ] **Step 1:** create `backend/tests/test_comment_count.py`:
+- [x] **Step 1:** create `backend/tests/test_comment_count.py`:
 
 ```python
 from pathlib import Path
@@ -707,8 +707,8 @@ def test_only_added_modified_and_renamed_countable_files_are_read():
     ]
 ```
 
-- [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_count.py -q`. Expected: collection error `No module named 'comment_count'` (red).
-- [ ] **Step 3:** create `scripts/rules/comment_count.py`:
+- [x] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_count.py -q`. Expected: collection error `No module named 'comment_count'` (red).
+- [x] **Step 3:** create `scripts/rules/comment_count.py`:
 
 ```python
 import os
@@ -869,8 +869,8 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4:** in `scripts/rules/run.sh` replace `for rule in pr_size spec_location shared_block; do` with `for rule in pr_size spec_location shared_block comment_count; do`.
-- [ ] **Step 5:** in `backend/tests/test_rules.py`, in `test_a_clean_change_passes_every_rule` replace the expected list with:
+- [x] **Step 4:** in `scripts/rules/run.sh` replace `for rule in pr_size spec_location shared_block; do` with `for rule in pr_size spec_location shared_block comment_count; do`.
+- [x] **Step 5:** in `backend/tests/test_rules.py`, in `test_a_clean_change_passes_every_rule` replace the expected list with:
 
 ```python
     assert result.stdout.splitlines() == [
@@ -882,15 +882,15 @@ if __name__ == "__main__":
     ]
 ```
 
-- [ ] **Step 6:** `cd backend && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_count.py tests/test_rules.py tests/test_comment_tokens.py -q`. Expected: all pass (`30 + 28 + 50`).
-- [ ] **Step 7:** mutation checks, each must turn a test red, then restore: (a) in `growth` change `after > before` to `after >= before` (the rename and fewer-comments tests); (b) replace `if old_path else 0` by `if old_path else 5` (new-file test); (c) in `main` change `path not in given` to `not given` (the one-file-does-not-lift-another test); (d) in `REASON` change `\S.*` to `.*` (blank-reason test); (e) remove `or "fixtures" in pure.parts[:-1]` (fixtures test); (f) remove `path in GENERATED` (generated-file test).
-- [ ] **Step 8:** `git add scripts/rules backend/tests && git commit -m "Add the comment-count rule"`.
+- [x] **Step 6:** `cd backend && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_count.py tests/test_rules.py tests/test_comment_tokens.py -q`. Expected: all pass (`30 + 28 + 50`).
+- [x] **Step 7:** mutation checks, each must turn a test red, then restore: (a) in `growth` change `after > before` to `after >= before` (the rename and fewer-comments tests); (b) replace `if old_path else 0` by `if old_path else 5` (new-file test); (c) in `main` change `path not in given` to `not given` (the one-file-does-not-lift-another test); (d) in `REASON` change `\S.*` to `.*` (blank-reason test); (e) remove `or "fixtures" in pure.parts[:-1]` (fixtures test); (f) remove `path in GENERATED` (generated-file test).
+- [x] **Step 8:** `git add scripts/rules backend/tests && git commit -m "Add the comment-count rule"`.
 
 ### Task 5: Wiring and docs
 
 **Files:** modify `.github/workflows/ci.yml`, `AGENTS.md`.
 
-- [ ] **Step 1:** in `.github/workflows/ci.yml`, in job `rules`, add after the checkout step (before `- run: scripts/rules/run.sh`), with the `actions/setup-python` SHA the other jobs use:
+- [x] **Step 1:** in `.github/workflows/ci.yml`, in job `rules`, add after the checkout step (before `- run: scripts/rules/run.sh`), with the `actions/setup-python` SHA the other jobs use:
 
 ```yaml
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -899,13 +899,13 @@ if __name__ == "__main__":
 ```
 
 Confirm the job already has `permissions: pull-requests: read`, `GH_TOKEN` and `PR_NUMBER` (BLOG-59); `GITHUB_REPOSITORY` and `GITHUB_STEP_SUMMARY` come from the runner.
-- [ ] **Step 2:** `actionlint` (or `docker run` as in `scripts/ci-local.sh`, `workflow-lint` step). Expected: no output.
-- [ ] **Step 3:** in `AGENTS.md`, in the CI sentence, replace `` `rules` (`scripts/rules/run.sh`: `pr-size`, `spec-location`, `shared-block`; each has violating inputs in `backend/tests/test_rules.py`; `comment-count` follows in BLOG-60) `` with `` `rules` (`scripts/rules/run.sh`: `pr-size`, `spec-location`, `shared-block`, `comment-count`; violating inputs in `backend/tests/test_rules.py` and `test_comment_count.py`; `comment-count` counts comment lines in Python, TypeScript, JavaScript, shell, YAML, TOML and Dockerfiles, lets a file grow only with a PR description line `Comments: <path>: <reason>` (locally the same lines in the variable `COMMENTS_REASON`), and prints before, after and the change in percent per file in the job summary; its directive exceptions are `scripts/rules/comment-directives.txt`) ``.
-- [ ] **Step 4:** `git add .github AGENTS.md && git commit -m "Run the rules with the repo's Python and document comment-count"`.
+- [x] **Step 2:** `actionlint` (or `docker run` as in `scripts/ci-local.sh`, `workflow-lint` step). Expected: no output.
+- [x] **Step 3:** in `AGENTS.md`, in the CI sentence, replace `` `rules` (`scripts/rules/run.sh`: `pr-size`, `spec-location`, `shared-block`; each has violating inputs in `backend/tests/test_rules.py`; `comment-count` follows in BLOG-60) `` with `` `rules` (`scripts/rules/run.sh`: `pr-size`, `spec-location`, `shared-block`, `comment-count`; violating inputs in `backend/tests/test_rules.py` and `test_comment_count.py`; `comment-count` counts comment lines in Python, TypeScript, JavaScript, shell, YAML, TOML and Dockerfiles, lets a file grow only with a PR description line `Comments: <path>: <reason>` (locally the same lines in the variable `COMMENTS_REASON`), and prints before, after and the change in percent per file in the job summary; its directive exceptions are `scripts/rules/comment-directives.txt`) ``.
+- [x] **Step 4:** `git add .github AGENTS.md && git commit -m "Run the rules with the repo's Python and document comment-count"`.
 
 ### Task 6: Cross-check, verify, clean up, hand over
 
-- [ ] **Step 1: cross-check against the TypeScript scanner (one-off, not in CI).** Install the locked frontend dependencies (`cd frontend && npm ci --ignore-scripts`). In the scratchpad directory write `tsscan.cjs` and `crosscheck.py`:
+- [x] **Step 1: cross-check against the TypeScript scanner (one-off, not in CI).** Install the locked frontend dependencies (`cd frontend && npm ci --ignore-scripts`). In the scratchpad directory write `tsscan.cjs` and `crosscheck.py`:
 
 `tsscan.cjs`:
 
@@ -1004,10 +1004,10 @@ print(f"{len(files)} files, scanner {total_ref}, ours {total_ours}, {differences
 ```
 
 Expected on this repo's `main` before the PR: `0 differ`. For each file that differs, read both line sets, fix `comment_ts.py` with a test first, or explain the difference. Record the final output and each resolution on BLOG-60. The scripts stay in the scratchpad: they are not committed.
-- [ ] **Step 2:** `cd backend && poetry run ruff check . ../scripts/rules && poetry run ruff format --check . ../scripts/rules && poetry run pyright && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`. Expected: no errors; all tests pass. If pyright flags a test module, type it with the smallest change and rerun.
-- [ ] **Step 3:** `bash scripts/rules/run.sh`. Expected: four ok lines; `comment-count` lists the changed countable files with before and after.
-- [ ] **Step 4:** cleanup commit under the comment standard in "Global constraints": in each edited file delete the comments that fail it (and any redundant test, saying what it duplicated); separate commit "Delete comments that restate the code in the touched files". Also in this commit: `pr_size.main` measures the diff once and `common` gets the one `diff` helper the three rules share (BLOG-59 audit leftovers), tests unchanged and green. Record the before and after comment lines per file on the ticket.
-- [ ] **Step 5:** run `auditing-branch-changes` (subagent) before `gh pr create`; fix findings.
-- [ ] **Step 6:** `git fetch && git merge origin/main`, push, `gh pr create --draft` (title without any tool name; body: what changed, local checks, one `Comments: <path>: <reason>` line per file that keeps comments), set `Status: done (PR #n)` in the spec and this plan, push.
-- [ ] **Step 7:** wait with the bare `gh pr checks <n> -R Fredheda/Personal-Blog-Studio --watch --interval 60 --fail-fast` as a background task; when the draft's CI finished, `gh pr ready`, wait again, confirm every job ran (including `rules`, and its summary shows the table), read the review `Verdict:` once, hand the URL to the coordinator. Owner merges.
-- [ ] **Step 8:** after merge: remove the worktree (no `--force`), delete the branch, check the remote branch is gone, `git pull --ff-only` in the main checkout, BLOG-60 to Done with what shipped.
+- [x] **Step 2:** `cd backend && poetry run ruff check . ../scripts/rules && poetry run ruff format --check . ../scripts/rules && poetry run pyright && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`. Expected: no errors; all tests pass. If pyright flags a test module, type it with the smallest change and rerun.
+- [x] **Step 3:** `bash scripts/rules/run.sh`. Expected: four ok lines; `comment-count` lists the changed countable files with before and after.
+- [x] **Step 4:** cleanup commit under the comment standard in "Global constraints": in each edited file delete the comments that fail it (and any redundant test, saying what it duplicated); separate commit "Delete comments that restate the code in the touched files". Also in this commit: `pr_size.main` measures the diff once and `common` gets the one `diff` helper the three rules share (BLOG-59 audit leftovers), tests unchanged and green. Record the before and after comment lines per file on the ticket.
+- [x] **Step 5:** run `auditing-branch-changes` (subagent) before `gh pr create`; fix findings.
+- [x] **Step 6:** `git fetch && git merge origin/main`, push, `gh pr create --draft` (title without any tool name; body: what changed, local checks, one `Comments: <path>: <reason>` line per file that keeps comments), set `Status: done (PR #n)` in the spec and this plan, push.
+- [x] **Step 7:** wait with the bare `gh pr checks <n> -R Fredheda/Personal-Blog-Studio --watch --interval 60 --fail-fast` as a background task; when the draft's CI finished, `gh pr ready`, wait again, confirm every job ran (including `rules`, and its summary shows the table), read the review `Verdict:` once, hand the URL to the coordinator. Owner merges.
+- [x] **Step 8:** after merge: remove the worktree (no `--force`), delete the branch, check the remote branch is gone, `git pull --ff-only` in the main checkout, BLOG-60 to Done with what shipped.

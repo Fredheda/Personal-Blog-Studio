@@ -52,11 +52,8 @@ def label_granted(events: list[dict], owner: str) -> bool:
     return granted
 
 
-def check(numstat: str, override: bool) -> str | None:
-    files, lines = measure(numstat)
+def check(files: int, lines: int) -> str | None:
     if files <= MAX_FILES and lines <= MAX_LINES:
-        return None
-    if override:
         return None
     return (
         f"{files} files and {lines} lines (limit {MAX_FILES} and {MAX_LINES}); "
@@ -93,11 +90,10 @@ def override_granted() -> bool:
 
 
 def main() -> int:
-    numstat = common.git("diff", "--numstat", "-M", common.merge_base(), "HEAD")
-    problem = check(numstat, override=False)
+    files, lines = measure(common.diff("--numstat", "-M"))
+    problem = check(files, lines)
     if problem and override_granted():
         problem = None
-    files, lines = measure(numstat)
     if problem:
         print(f"pr-size: FAIL {problem}")
         return 1

@@ -31,11 +31,7 @@ def added_paths(name_status: str) -> list[str]:
 
 
 def main() -> int:
-    bad = misplaced(
-        added_paths(
-            common.git("diff", "--name-status", "-M", common.merge_base(), "HEAD")
-        )
-    )
+    bad = misplaced(added_paths(common.diff("--name-status", "-M")))
     if bad:
         print("spec-location: FAIL specs and plans belong in docs/specs and docs/plans")
         for path in bad:
