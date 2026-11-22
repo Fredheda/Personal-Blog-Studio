@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pr_size
 import shared_block
+import spec_location
 
 RULES = Path(__file__).resolve().parents[2] / "scripts" / "rules"
 FIXTURES = Path(__file__).parent / "fixtures" / "rules"
@@ -104,3 +105,30 @@ def test_a_removed_label_does_not_count():
 
 def test_other_labels_do_not_count():
     assert pr_size.label_granted([label("labeled", "owner", "bug")], "owner") is False
+
+
+def test_a_dated_spec_outside_the_spec_folders_fails():
+    assert spec_location.misplaced(["docs/shared/2026-11-22-idea.md"]) == ["docs/shared/2026-11-22-idea.md"]
+
+
+def test_a_markdown_file_in_a_folder_named_specs_elsewhere_fails():
+    assert spec_location.misplaced(["notes/specs/idea.md"]) == ["notes/specs/idea.md"]
+
+
+def test_specs_plans_and_diagrams_in_their_folders_pass():
+    paths = [
+        "docs/specs/2026-11-22-idea.md",
+        "docs/plans/2026-11-22-idea.md",
+        "docs/plans/diagrams/2026-11-22-idea.mmd",
+    ]
+    assert spec_location.misplaced(paths) == []
+
+
+def test_ordinary_files_pass():
+    paths = ["README.md", "docs/api-changelog.md", "backend/tests/fixtures/rules/agents-block-good.md"]
+    assert spec_location.misplaced(paths) == []
+
+
+def test_added_and_renamed_to_paths_are_read_from_name_status():
+    rows = "A\tx.md\nM\ty.md\nD\tz.md\nR100\told.md\tdocs/shared/2026-11-22-new.md\n"
+    assert spec_location.added_paths(rows) == ["x.md", "docs/shared/2026-11-22-new.md"]
