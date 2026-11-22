@@ -32,11 +32,15 @@ function restricted(ids: string[]): boolean {
   return ids.includes("no-restricted-imports") || ids.includes("no-restricted-syntax");
 }
 
+const effectsFolder = join(process.cwd(), "effects");
+
 function sources(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    if (["node_modules", ".next", "effects"].includes(entry.name)) return [];
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return sources(path);
+    if (entry.isDirectory()) {
+      if (["node_modules", ".next"].includes(entry.name) || path === effectsFolder) return [];
+      return sources(path);
+    }
     return /\.(ts|tsx)$/.test(entry.name) ? [path] : [];
   });
 }
