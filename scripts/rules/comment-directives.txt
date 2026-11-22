@@ -2,12 +2,13 @@ python	^!
 python	^(-\*-\s*)?coding[:=]
 python	^noqa\b
 python	^type:\s*ignore
-python	^(pyright|ruff|isort|pylint|mypy):
+python	^(pyright|ruff|flake8|isort|pylint|mypy):
 python	^pragma:
 python	^nosec\b
 python	^fmt:\s*(off|on|skip)
 ts	^!
 ts	^eslint-(disable|enable)
+ts	^eslint\s
 ts	^@ts-(expect-error|ignore|nocheck|check)
 ts	^prettier-ignore
 ts	^(istanbul|v8|c8) ignore\b

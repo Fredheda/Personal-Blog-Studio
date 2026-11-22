@@ -108,7 +108,8 @@ def test_full_line_hash_comments_count_in_scripts_and_config(tmp_path, path):
 
 def code_with_comments(code: int, comments: int) -> str:
     lines = [f"x{i} = {i}" for i in range(code)]
-    return "\n".join([f"# c{i}" for i in range(comments)] + lines) + "\n"
+    notes = [f"# c{i}" for i in range(comments)]
+    return "\n".join(lines[:1] + notes + lines[1:]) + "\n"
 
 
 def test_a_shrinking_file_above_the_floor_still_fails(tmp_path):
