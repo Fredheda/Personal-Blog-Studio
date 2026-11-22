@@ -39,7 +39,8 @@ extend-exclude = [".venv"]
 select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pyright]
-include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests"]
+include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests", "../scripts/rules"]
+extraPaths = ["../scripts/rules"]
 pythonVersion = "3.13"
 typeCheckingMode = "basic"
 

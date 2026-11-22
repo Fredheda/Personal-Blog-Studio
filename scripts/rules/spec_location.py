@@ -13,7 +13,9 @@ def misplaced(paths: list[str]) -> list[str]:
     for path in paths:
         if path.startswith(ALLOWED):
             continue
-        in_spec_folder = bool(SPEC_FOLDERS & set(path.split("/")[:-1])) and path.endswith((".md", ".mmd"))
+        in_spec_folder = bool(
+            SPEC_FOLDERS & set(path.split("/")[:-1])
+        ) and path.endswith((".md", ".mmd"))
         if DATED.search(path) or in_spec_folder:
             bad.append(path)
     return bad
@@ -29,7 +31,11 @@ def added_paths(name_status: str) -> list[str]:
 
 
 def main() -> int:
-    bad = misplaced(added_paths(common.git("diff", "--name-status", "-M", common.merge_base(), "HEAD")))
+    bad = misplaced(
+        added_paths(
+            common.git("diff", "--name-status", "-M", common.merge_base(), "HEAD")
+        )
+    )
     if bad:
         print("spec-location: FAIL specs and plans belong in docs/specs and docs/plans")
         for path in bad:

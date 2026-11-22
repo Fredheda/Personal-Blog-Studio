@@ -28,7 +28,10 @@ step "backend-test"
 (cd backend && poetry run pytest -v)
 
 step "backend-lint"
-(cd backend && poetry run ruff check . && poetry run ruff format --check . && poetry run pyright)
+(cd backend && poetry run ruff check . ../scripts/rules && poetry run ruff format --check . ../scripts/rules && poetry run pyright)
+
+step "rules"
+scripts/rules/run.sh
 
 step "storage-contract"
 docker run -d --rm --name blog-ci-azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5 \

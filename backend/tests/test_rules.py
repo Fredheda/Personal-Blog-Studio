@@ -10,11 +10,18 @@ import spec_location
 RULES = Path(__file__).resolve().parents[2] / "scripts" / "rules"
 FIXTURES = Path(__file__).parent / "fixtures" / "rules"
 GOOD = (FIXTURES / "agents-block-good.md").read_text()
-RECORDED = shared_block.digest(shared_block.extract(GOOD))
+
+
+def present(value: str | None) -> str:
+    assert value is not None
+    return value
+
+
+RECORDED = shared_block.digest(present(shared_block.extract(GOOD)))
 
 
 def test_the_block_runs_from_the_start_marker_to_the_end_marker():
-    block = shared_block.extract(GOOD)
+    block = present(shared_block.extract(GOOD))
     assert block.startswith("<!-- shared:start -->\n")
     assert block.endswith("<!-- shared:end -->\n")
     assert "Repo facts." not in block
@@ -30,16 +37,19 @@ def test_text_outside_the_block_may_change():
 
 def test_an_edited_block_fails():
     edited = (FIXTURES / "agents-block-edited.md").read_text()
-    assert "differs" in shared_block.check(edited, RECORDED)
+    assert "differs" in present(shared_block.check(edited, RECORDED))
 
 
 def test_missing_markers_fail():
     text = (FIXTURES / "agents-no-markers.md").read_text()
-    assert "no shared block" in shared_block.check(text, RECORDED)
+    assert "no shared block" in present(shared_block.check(text, RECORDED))
 
 
 def test_the_hash_file_in_a_diff_is_noticed():
-    assert shared_block.hash_file_changed(["a.py", "scripts/rules/shared-block.sha256"]) is True
+    assert (
+        shared_block.hash_file_changed(["a.py", "scripts/rules/shared-block.sha256"])
+        is True
+    )
     assert shared_block.hash_file_changed(["AGENTS.md"]) is False
 
 
@@ -48,7 +58,7 @@ def rows(count: int, lines: int = 1, path: str = "src/file{}.py") -> str:
 
 
 def test_26_files_fail():
-    assert "26 files" in pr_size.check(rows(26), override=False)
+    assert "26 files" in present(pr_size.check(rows(26), override=False))
 
 
 def test_25_files_pass():
@@ -56,7 +66,8 @@ def test_25_files_pass():
 
 
 def test_5001_lines_fail():
-    assert "5001 lines" in pr_size.check("5001\t0\tsrc/big.py\n", override=False)
+    problem = pr_size.check("5001\t0\tsrc/big.py\n", override=False)
+    assert "5001 lines" in present(problem)
 
 
 def test_5000_lines_pass():
@@ -111,7 +122,9 @@ def test_other_labels_do_not_count():
 
 
 def test_a_dated_spec_outside_the_spec_folders_fails():
-    assert spec_location.misplaced(["docs/shared/2026-11-22-idea.md"]) == ["docs/shared/2026-11-22-idea.md"]
+    assert spec_location.misplaced(["docs/shared/2026-11-22-idea.md"]) == [
+        "docs/shared/2026-11-22-idea.md"
+    ]
 
 
 def test_a_markdown_file_in_a_folder_named_specs_elsewhere_fails():
@@ -128,7 +141,11 @@ def test_specs_plans_and_diagrams_in_their_folders_pass():
 
 
 def test_ordinary_files_pass():
-    paths = ["README.md", "docs/api-changelog.md", "backend/tests/fixtures/rules/agents-block-good.md"]
+    paths = [
+        "README.md",
+        "docs/api-changelog.md",
+        "backend/tests/fixtures/rules/agents-block-good.md",
+    ]
     assert spec_location.misplaced(paths) == []
 
 
@@ -138,13 +155,28 @@ def test_added_and_renamed_to_paths_are_read_from_name_status():
 
 
 def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
-    shutil.copytree(RULES, tmp_path / "scripts" / "rules", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(
+        RULES,
+        tmp_path / "scripts" / "rules",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
     (tmp_path / "scripts" / "rules" / "shared-block.sha256").write_text(RECORDED + "\n")
     (tmp_path / "AGENTS.md").write_text(agents)
     for step in (
         ["init", "-q", "-b", "main"],
         ["add", "-A"],
-        ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"],
+        [
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "-m",
+            "base",
+        ],
     ):
         subprocess.run(["git", *step], cwd=tmp_path, check=True)
     return tmp_path
@@ -153,7 +185,19 @@ def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
 def commit_all(repo: Path) -> None:
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "change"],
+        [
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "-m",
+            "change",
+        ],
         cwd=repo,
         check=True,
     )
@@ -161,9 +205,17 @@ def commit_all(repo: Path) -> None:
 
 def run_rules(repo: Path) -> subprocess.CompletedProcess:
     base = subprocess.run(
-        ["git", "rev-parse", "HEAD~1"], cwd=repo, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD~1"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
-    env = {k: v for k, v in os.environ.items() if k not in ("PR_NUMBER", "GITHUB_REPOSITORY")}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PR_NUMBER", "GITHUB_REPOSITORY")
+    }
     return subprocess.run(
         ["bash", "scripts/rules/run.sh"],
         cwd=repo,
@@ -225,7 +277,7 @@ def test_a_block_and_its_hash_changed_together_are_flagged(tmp_path):
     edited = (FIXTURES / "agents-block-edited.md").read_text()
     (repo / "AGENTS.md").write_text(edited)
     (repo / "scripts" / "rules" / "shared-block.sha256").write_text(
-        shared_block.digest(shared_block.extract(edited)) + "\n"
+        shared_block.digest(present(shared_block.extract(edited))) + "\n"
     )
     commit_all(repo)
     result = run_rules(repo)

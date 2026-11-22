@@ -59,9 +59,27 @@ jobs:
           cache: poetry
           cache-dependency-path: backend/poetry.lock
       - run: poetry install --no-interaction
-      - run: poetry run ruff check .
-      - run: poetry run ruff format --check .
+      - run: poetry run ruff check . ../scripts/rules
+      - run: poetry run ruff format --check . ../scripts/rules
       - run: poetry run pyright
+
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: scripts/rules/run.sh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
 
   storage-contract:
     runs-on: ubuntu-latest

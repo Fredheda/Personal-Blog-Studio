@@ -75,7 +75,14 @@ def override_granted() -> bool:
         " | {event: .event, label: .label.name, actor: .actor.login}"
     )
     result = subprocess.run(
-        ["gh", "api", "--paginate", f"repos/{repo}/issues/{number}/events", "--jq", pick],
+        [
+            "gh",
+            "api",
+            "--paginate",
+            f"repos/{repo}/issues/{number}/events",
+            "--jq",
+            pick,
+        ],
         capture_output=True,
         text=True,
     )
