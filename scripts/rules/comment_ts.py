@@ -1,4 +1,6 @@
+import comment_model
 import directives
+from comment_model import Comment
 
 REGEX_KEYWORDS = {
     "return",
@@ -54,11 +56,16 @@ def skip_regex(source: str, start: int) -> int | None:
 
 
 def count(source: str) -> int:
-    lines: set[int] = set()
+    return len(comment_model.lines(comments(source)))
+
+
+def comments(source: str) -> list[Comment]:
+    found: list[Comment] = []
     line = 1
     i = 0
     if source.startswith("#!"):
         i = source.find("\n") if "\n" in source else len(source)
+        found.append(Comment(1, 1, source[:i], True))
     depth = 0
     interpolations: list[int] = []
     previous = ""
@@ -66,9 +73,10 @@ def count(source: str) -> int:
     in_template = False
 
     def record(text: str, first_line: int) -> None:
-        if directives.is_directive(text, "ts"):
-            return
-        lines.update(range(first_line, first_line + text.count("\n") + 1))
+        end = first_line + text.count("\n")
+        found.append(
+            Comment(first_line, end, text, directives.is_directive(text, "ts"))
+        )
 
     while i < len(source):
         char = source[i]
@@ -141,4 +149,4 @@ def count(source: str) -> int:
                     in_template = True
             previous = char
             i += 1
-    return len(lines)
+    return found

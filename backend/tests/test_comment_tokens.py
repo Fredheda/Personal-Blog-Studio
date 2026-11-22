@@ -84,3 +84,27 @@ def test_hash_counts(source, expected):
 )
 def test_ts_counts(source, expected):
     assert comment_ts.count(source) == expected
+
+
+def test_python_comments_carry_the_owner_words_of_a_docstring():
+    found = comment_python.comments('def fetch_user(user_id, *rest):\n    """Doc."""\n')
+    docstring = found[0]
+    assert docstring.owner == {"fetch", "user", "id", "rest"}
+    assert (docstring.line, docstring.end) == (2, 2)
+
+
+def test_owner_words_split_camel_case_and_acronyms():
+    found = comment_python.comments('class HTTPError:\n    """HTTP error."""\n')
+    assert found[0].owner == {"http", "error"}
+
+
+def test_typescript_comments_mark_the_shebang_and_directives():
+    found = comment_ts.comments(
+        "#!/usr/bin/env node\n// eslint-disable-next-line x\n// a\n"
+    )
+    assert [(c.line, c.directive) for c in found] == [(1, True), (2, True), (3, False)]
+
+
+def test_hash_comments_mark_directives():
+    found = comment_hash.comments("#!/bin/sh\n# note\nx=1\n")
+    assert [(c.line, c.directive) for c in found] == [(1, True), (2, False)]
