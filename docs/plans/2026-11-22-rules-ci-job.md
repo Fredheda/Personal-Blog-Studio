@@ -14,8 +14,7 @@
 ## TL;DR
 
 - Ships: `scripts/rules/` (`run.sh`, `pr_size.py`, `spec_location.py`, `shared_block.py`, `shared-block.sha256`), `backend/tests/test_rules.py` and fixtures, CI job `rules`, a `rules` step in `ci-local.sh`, `ruff` and `pyright` also covering `scripts/rules`, one line each in `AGENTS.md` for the job and the lint line.
-- The scripts are byte-identical across repos (W3 compares them by hash); the one repo-specific part is the data file `pr-size-generated.txt`. The `size-override` check stops Devin and other bot accounts, not a local session that runs `gh` as the owner (the owner's hook closes that side).
-- One code PR after the docs PR, about 16 files, tests first. Owner merges (`.github/`). No dependency, no cost.
+- The scripts are byte-identical across repos (W3 compares them by hash); the one repo-specific part is the data file `pr-size-generated.txt`.- One code PR after the docs PR, about 16 files, tests first. Owner merges (`.github/`). No dependency, no cost.
 - After the job has run once on `main`, the owner decides whether `rules` becomes a required check in the `main` ruleset (not part of this work).
 - The comment count of every edited file does not grow; the new files carry no comments.
 

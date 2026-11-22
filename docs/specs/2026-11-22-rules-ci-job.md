@@ -35,8 +35,6 @@ Every agent (Claude, Devin, later ones) goes through CI, so CI is the one place 
 
 `size-override`: in CI the rule reads the label events of the PR from the GitHub API and accepts the label only when the latest `labeled` or `unlabeled` event for it is a `labeled` by the repository owner. A failed API call counts as no override. Locally the label cannot be checked, so the limit applies. Setting the label does not re-run the job (`labeled` is not a trigger of `ci.yml`, and stays out): the owner sets it and re-runs the job; the failure line says so.
 
-Limit of the check: a local Claude session runs `gh` with the owner's own login, so "set by the owner" does not separate the owner from a local agent. It does stop Devin and every other bot account. The local-agent side is closed by the owner's hook that restricts `gh` label commands in agent sessions.
-
 The `pr-size` generated-files list is data, not code: `scripts/rules/pr-size-generated.txt`, one path per line (`openapi/v1.json`, `frontend/next-env.d.ts`), so the scripts stay byte-identical across repos and only the data file differs.
 
 `shared-block` hash: sha256 of the block text from the start marker line to the end marker line, inclusive, lines joined with `\n` and one trailing `\n`. `scripts/rules/shared_block.py --print-hash <file>` prints it; the recorded hash is the hash of the owner's template file `agents-shared-block.md`. When the owner changes the template, the hash file changes with the matching `AGENTS.md` block in one PR. When a PR's diff touches the hash file the rule still compares block and hash, and on success prints `shared-block: ok (hash file changed in this PR)`, so a block and its hash cannot change together unseen.
