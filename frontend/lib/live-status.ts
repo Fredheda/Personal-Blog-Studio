@@ -5,7 +5,7 @@ export function postStatus(item: Pick<ListItem, "published" | "version">): strin
 }
 
 export function publishedNotice(version: number, slug: string): string {
-  return `Published as version ${version}. It is live at /blog/${slug}.`;
+  return `Published as version ${version}. Live at /blog/${slug}.`;
 }
 
 export function unpublishedNotice(slug: string): string {

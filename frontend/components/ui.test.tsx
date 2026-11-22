@@ -42,6 +42,13 @@ test.each([
   expect(screen.getByRole(role).textContent).toBe("Said it");
 });
 
+test("a warning strip is an amber alert", () => {
+  render(<MessageStrip kind="warning">Not published: fix the problems listed under Check.</MessageStrip>);
+  const strip = screen.getByRole("alert");
+  expect(strip.className).toContain("border-warn");
+  expect(strip.textContent).toBe("Not published: fix the problems listed under Check.");
+});
+
 test("a strip shows its action next to the text", () => {
   render(
     <MessageStrip kind="conflict" action={<Button variant="primary">Reload the post</Button>}>
