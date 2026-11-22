@@ -1,0 +1,50 @@
+flowchart TB
+  classDef new fill:#c8e6c9,stroke:#2e7d32,color:#000
+  classDef changed fill:#ffe0b2,stroke:#ef6c00,color:#000
+  classDef unchanged fill:#e0e0e0,stroke:#616161,color:#000
+
+  subgraph browser["Browser: the post page"]
+    editor["PostEditor.tsx<br/>owns title, slug, summary, tags (string[]), Save"]:::changed
+    details["PostDetails.tsx<br/>title h1, summary, slug pill, tag pills, plain text in Preview"]:::new
+    crepe["CrepeEditor.tsx"]:::unchanged
+    topbar["TopBar: Save, Preview, Publish"]:::unchanged
+  end
+
+  subgraph lib["frontend/lib"]
+    tags["tags.ts<br/>addTags, removeLast, removeTag"]:::new
+    slug["slug.ts<br/>slugInput"]:::new
+    api["studio-api.ts<br/>patchMeta"]:::unchanged
+  end
+
+  subgraph webapp["Web app"]
+    proxy["/api/studio proxy"]:::unchanged
+  end
+
+  subgraph backend["Studio API"]
+    meta["PATCH /posts/{id}/meta"]:::unchanged
+    slugrule["slug rule (ids.py)"]:::unchanged
+  end
+
+  subgraph checks["Tests"]
+    unit["tags, slug, PostDetails, PostEditor unit tests"]:::new
+    e2e["e2e/studio.spec.ts<br/>four new flows"]:::changed
+  end
+
+  editor --> details
+  editor --> crepe
+  editor --> topbar
+  details --> tags
+  details --> slug
+  editor -- "Save" --> api
+  api --> proxy
+  proxy --> meta
+  meta --> slugrule
+  unit --> details
+  unit --> editor
+  e2e --> editor
+
+  subgraph legend["Legend"]
+    l1["new"]:::new
+    l2["changed"]:::changed
+    l3["unchanged"]:::unchanged
+  end
