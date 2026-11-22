@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { createAutosave, type AutosaveStatus } from "../lib/autosave";
@@ -23,9 +23,11 @@ import { useCheck } from "../lib/use-check";
 import { Button } from "./Button";
 import { Dialog } from "./Dialog";
 import { MessageStrip } from "./MessageStrip";
+import type { EditorHandle } from "./CrepeEditor";
 import { Preview } from "./Preview";
 import { ProblemList } from "./ProblemList";
-import { StepsLane } from "./StepsLane";
+import { Sheet } from "./Sheet";
+import { Problems, StepChips, StepsLane } from "./StepsLane";
 import { TopBarActions } from "./TopBarActions";
 import { useTopBarSlot } from "./TopBarSlot";
 
@@ -54,8 +56,8 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [body, setBody] = useState("");
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [status, setStatus] = useState<AutosaveStatus>("idle");
-  const [error, setError] = useState<ApiError | null>(null); // details, publish, unpublish
-  const [bodyError, setBodyError] = useState<ApiError | null>(null); // autosave
+  const [error, setError] = useState<ApiError | null>(null);
+  const [bodyError, setBodyError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -64,6 +66,8 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [saves, setSaves] = useState(0); // every successful save and every reload: the check asks again
   const [refusal, setRefusal] = useState<{ problems: CheckProblem[]; at: number } | null>(null);
   const [askUnpublish, setAskUnpublish] = useState(false);
+  const [sheet, setSheet] = useState<"check" | "publish" | null>(null);
+  const [jumpMiss, setJumpMiss] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   // The ETags live in refs: the save callback updates the body's before it
@@ -73,8 +77,16 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const metaEtag = useRef("");
   const autosave = useRef<ReturnType<typeof createAutosave> | null>(null);
   const running = useRef(false); // saveAll() in progress: a second click sends nothing
+  const editor = useRef<EditorHandle | null>(null);
+  const pendingJump = useRef<{ line: number; markdown: string } | null>(null);
+  const setEditor = useCallback((handle: EditorHandle | null) => {
+    editor.current = handle;
+    if (handle === null || pendingJump.current === null) return;
+    const { line, markdown } = pendingJump.current;
+    pendingJump.current = null;
+    setJumpMiss(handle.jumpToLine(line, markdown) ? null : line);
+  }, []);
 
-  // A freshly loaded post: every field and both ETags.
   function adoptLoaded(draft: Draft) {
     setSaved(draft);
     setTitle(draft.title);
@@ -174,7 +186,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     current: () => ({ bodyEtag: bodyEtag.current, metaEtag: metaEtag.current }),
   });
 
-  // Unsaved details count too: leaving with an edited title or slug warns.
   const detailsUnsaved =
     saved !== null &&
     (title !== saved.title || slug !== saved.slug || summary !== saved.summary ||
@@ -215,6 +226,9 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const activeRefusal = refusal !== null && refusal.at === saves ? refusal.problems : null;
   const checkState: CheckState = activeRefusal ? { phase: "done", problems: activeRefusal } : check;
   const gate = publishGate({ kind, check: checkState, busy: busy || publishing });
+  const writeView = writeStep(kind, ago);
+  const checkView = checkStep(kind, checkState);
+  const publishView = publishStep(saved, kind, checkState);
 
   /** Saves everything that is unsaved: the details first (details ETag), then
    *  the body (body ETag, through the autosave controller). True only when both
@@ -302,20 +316,44 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
 
   const shownError = error?.status === 412 ? null : error;
   const shownBodyError = bodyError?.status === 412 ? null : bodyError;
-  const edited = () => setNotice("");
+  const edited = () => {
+    setNotice("");
+    setJumpMiss(null);
+  };
+
+  function jumpTo(line: number) {
+    setSheet(null);
+    setView("edit");
+    const markdown = saved!.body;
+    requestAnimationFrame(() => {
+      if (editor.current === null) {
+        pendingJump.current = { line, markdown };
+        return;
+      }
+      setJumpMiss(editor.current.jumpToLine(line, markdown) ? null : line);
+    });
+  }
 
   return (
     <div className="min-[760px]:grid min-[760px]:grid-cols-[232px_1fr] min-[1180px]:grid-cols-[262px_1fr]">
+      <StepChips
+        write={writeView}
+        check={checkView}
+        publish={publishView}
+        onOpenProblems={() => setSheet("check")}
+        onOpenPublish={() => setSheet("publish")}
+      />
       <aside
         aria-label="Post steps"
-        className="border-b border-line bg-deep p-4 min-[760px]:min-h-[calc(100vh-58px)] min-[760px]:border-b-0 min-[760px]:border-r"
+        className="hidden border-line bg-deep p-4 min-[760px]:block min-[760px]:min-h-[calc(100vh-58px)] min-[760px]:border-r"
       >
         <div className="min-[760px]:sticky min-[760px]:top-[58px] min-[760px]:max-h-[calc(100vh-58px)] min-[760px]:overflow-y-auto">
           <StepsLane
-            write={writeStep(kind, ago)}
-            check={checkStep(kind, checkState)}
-            publish={publishStep(saved, kind, checkState)}
+            write={writeView}
+            check={checkView}
+            publish={publishView}
             onUnpublish={() => setAskUnpublish(true)}
+            onJump={jumpTo}
           />
         </div>
       </aside>
@@ -349,6 +387,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         <ProblemList error={shownError} />
         {activeRefusal && <MessageStrip kind="warning">{REFUSED}</MessageStrip>}
         {notice && <MessageStrip kind="success">{notice}</MessageStrip>}
+        {jumpMiss !== null && <MessageStrip kind="error">Could not find line {jumpMiss} in the editor.</MessageStrip>}
 
         <h1>{saved.title || "(untitled)"}</h1>
 
@@ -364,6 +403,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         <div className="mt-4" hidden={view !== "edit"}>
           <CrepeEditor
             key={reloadKey}
+            onReady={setEditor}
             initial={saved.body}
             onChange={(text) => {
               setBody(text);
@@ -405,6 +445,28 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
         >
           It leaves the blog at once. The draft and its published versions stay in the studio.
         </Dialog>
+      )}
+      {sheet === "check" && (
+        <Sheet title="Check" onClose={() => setSheet(null)}>
+          <p className="m-0 text-muted">{checkView.text}</p>
+          <Problems problems={checkView.problems} onJump={jumpTo} />
+        </Sheet>
+      )}
+      {sheet === "publish" && (
+        <Sheet title="Publish" onClose={() => setSheet(null)}>
+          <p className="m-0 text-muted">{publishView.text}</p>
+          {publishView.canUnpublish && (
+            <Button
+              className="mt-3"
+              onClick={() => {
+                setSheet(null);
+                setAskUnpublish(true);
+              }}
+            >
+              Unpublish
+            </Button>
+          )}
+        </Sheet>
       )}
     </div>
   );

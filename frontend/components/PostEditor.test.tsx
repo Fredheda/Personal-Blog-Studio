@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render as renderUi, screen, waitFor, within } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { useEffect, type ReactElement } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ApiError } from "../lib/problem";
@@ -21,15 +21,36 @@ function render(ui: ReactElement) {
 }
 
 // The real editor is covered in CrepeEditor.test.tsx; here a textarea stands in.
+const jumpToLine = vi.hoisted(() => vi.fn<(line: number, markdown: string) => boolean>(() => true));
+const editorDelay = vi.hoisted(() => ({ ms: 0 }));
+
 vi.mock("./CrepeEditor", () => ({
-  CrepeEditor: ({ initial, onChange }: { initial: string; onChange: (text: string) => void }) => (
-    <textarea aria-label="Body (Markdown)" defaultValue={initial} onChange={(e) => onChange(e.target.value)} />
-  ),
+  CrepeEditor: ({
+    initial,
+    onChange,
+    onReady,
+  }: {
+    initial: string;
+    onChange: (text: string) => void;
+    onReady?: (handle: { jumpToLine: (line: number, markdown: string) => boolean } | null) => void;
+  }) => {
+    useEffect(() => {
+      const timer = setTimeout(() => onReady?.({ jumpToLine }), editorDelay.ms);
+      return () => {
+        clearTimeout(timer);
+        onReady?.(null);
+      };
+    }, [onReady]);
+    return <textarea aria-label="Body (Markdown)" defaultValue={initial} onChange={(e) => onChange(e.target.value)} />;
+  },
 }));
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  jumpToLine.mockReset();
+  jumpToLine.mockReturnValue(true);
+  editorDelay.ms = 0;
 });
 
 const draft: Draft = {
@@ -621,4 +642,90 @@ test("Preview is a toggle that renders the typed Markdown, maths as MathML, and 
   expect(document.querySelectorAll(".post-body math").length).toBeGreaterThan(0);
   fireEvent.click(toggle);
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("# Big\n\n$a^2$");
+});
+
+const rawHtml = checkAnswer([
+  { line: 3, message: "raw HTML is not allowed" },
+  { line: 0, message: "slug is required" },
+]);
+const strip = () => screen.getByRole("group", { name: "Steps summary" });
+const live = {
+  ...draft,
+  published: true,
+  version: 1,
+  publishedAt: "2026-11-12T09:00:00Z",
+  versionPublishedAt: "2026-11-12T09:00:00Z",
+  slugLocked: true,
+};
+
+test("a problem card with a line jumps the editor to that line in the saved text; a card without a line is not a button", async () => {
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: rawHtml })} />);
+  await loaded();
+  fireEvent.click(await within(lane()).findByRole("button", { name: /Line 3/ }));
+  await waitFor(() => expect(jumpToLine).toHaveBeenCalledWith(3, draft.body));
+  expect(within(lane()).queryByRole("button", { name: /Slug is required/ })).toBeNull();
+});
+
+test("a jump asked before the editor is ready runs as soon as it is, without a miss strip", async () => {
+  editorDelay.ms = 80;
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: rawHtml })} />);
+  await loaded();
+  fireEvent.click(await within(lane()).findByRole("button", { name: /Line 3/ }));
+  expect(jumpToLine).not.toHaveBeenCalled();
+  await waitFor(() => expect(jumpToLine).toHaveBeenCalledWith(3, draft.body));
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("when the editor cannot find the line the strip says so, and the next edit clears it", async () => {
+  jumpToLine.mockReturnValue(false);
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: rawHtml })} />);
+  await loaded();
+  fireEvent.click(await within(lane()).findByRole("button", { name: /Line 3/ }));
+  expect((await screen.findByRole("alert")).textContent).toBe("Could not find line 3 in the editor.");
+  fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Hello again" } });
+  expect(screen.queryByText("Could not find line 3 in the editor.")).toBeNull();
+});
+
+test("a jump from the Preview switches back to the editor first", async () => {
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: rawHtml })} />);
+  await loaded();
+  const toggle = screen.getByRole("button", { name: "Preview" });
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(await within(lane()).findByRole("button", { name: /Line 3/ }));
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  await waitFor(() => expect(jumpToLine).toHaveBeenCalledWith(3, draft.body));
+});
+
+test("the chip strip shows the steps; the Check chip opens the problems as a sheet and a tap on one closes it and jumps", async () => {
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: rawHtml })} />);
+  await loaded();
+  await within(strip()).findByRole("button", { name: "2 2 to fix" });
+  expect(strip().textContent).toContain("1 Saved");
+  expect(strip().textContent).toContain("3 Not published");
+  fireEvent.click(within(strip()).getByRole("button", { name: "2 2 to fix" }));
+  const sheet = screen.getByRole("dialog", { name: "Check" });
+  fireEvent.click(within(sheet).getByRole("button", { name: /Line 3/ }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  await waitFor(() => expect(jumpToLine).toHaveBeenCalledWith(3, draft.body));
+});
+
+test("the Publish chip opens a sheet with the Publish step; Unpublish there asks first", async () => {
+  render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => live })} />);
+  await loaded();
+  fireEvent.click(await within(strip()).findByRole("button", { name: "3 Published" }));
+  const sheet = screen.getByRole("dialog", { name: "Publish" });
+  expect(within(sheet).getByText(/^Published, version 1, on 12 Nov/)).toBeTruthy();
+  fireEvent.click(within(sheet).getByRole("button", { name: "Unpublish" }));
+  expect(screen.queryByRole("dialog", { name: "Publish" })).toBeNull();
+  expect(screen.getByRole("dialog", { name: "Unpublish this post?" })).toBeTruthy();
+});
+
+test("a post that is not published has no Unpublish in the Publish sheet", async () => {
+  render(<PostEditor id={draft.postId} api={fakeApi()} />);
+  await loaded();
+  fireEvent.click(await within(strip()).findByRole("button", { name: "3 Not published" }));
+  const sheet = screen.getByRole("dialog", { name: "Publish" });
+  expect(within(sheet).getByText(/^Not published yet/)).toBeTruthy();
+  expect(within(sheet).queryByRole("button", { name: "Unpublish" })).toBeNull();
 });
