@@ -8,9 +8,9 @@
 
 - Ships one PR: the lint settings (Ruff and ESLint), the `comment-content` rule with its data files, and the tokenizer change that lets the rule read the comments themselves.
 - A touched file fails when a comment names a ticket, a plan or spec path, a project, or history; when its header has more than 3 comment lines; when a docstring only repeats the signature; or when a tool directive switches off every lint rule or a comment lint rule. No escape.
-- No new dependency, no workflow change, no new Azure resource. The PR touches no `.github` file: the coordinator merges it once checks are green and the diff matches the ticket.
+- No new dependency, no workflow change, no new Azure resource. The PR touches no `.github` file and implements the owner's own decisions (606, 605, 607, quoted on the ticket): a coordinator merge (workspace `AGENTS.md`, auto-merge class (c)) once checks are green and the diff matches the ticket.
 - Cost: none.
-- Every code block below ran green in a prototype before this plan was written: 150 backend rule tests (`comment-content`, `comment-count`, the tokenizers and the rule runner), 6 Ruff-setting tests and 5 ESLint-setting tests; ruff clean. The three added tokenizer tests of Task 1 are the only ones not run in the prototype.
+- Every code block below ran green in a prototype before this plan was written: 164 backend rule tests (`comment-content`, `comment-count`, the tokenizers and the rule runner), 7 Ruff-setting tests and 8 ESLint-setting tests; ruff clean. The three added tokenizer tests of Task 1 are the only ones not run in the prototype.
 
 ## Cost estimate
 
@@ -57,7 +57,8 @@ flowchart TB
 - `comment-count` behaves exactly as before after the tokenizer change (its tests stay green, unchanged except one helper in Task 2).
 - A ticket key, project name or history phrase inside a string or in code is not a comment and does not fail (Task 2).
 - A shebang and tool directives do not count toward the header limit (Task 2).
-- A directive that switches off an unrelated lint rule is left alone (Task 2).
+- A directive that switches off an unrelated lint rule is left alone, and banned text after a directive is still found (Task 2).
+- Every Ruff and ESLint suppression form of the comment rules is covered, and no ignore or override turns them off (Tasks 2 and 3).
 
 ---
 
@@ -321,6 +322,13 @@ def content_output(tmp_path: Path, files: dict[str, str]) -> str:
         ("web/a.ts", "export const a = 1; // no longer needed\n", "narrates history"),
         ("web/a.ts", "/* tracked as CKE-7 */\nexport {};\n", "names a ticket"),
         ("run.sh", "# the old script, see git history\nset -e\n", "narrates history"),
+        ("src.py", "import os  # noqa: F401 see BLOG-12\n", "names a ticket"),
+        (
+            "web/a.ts",
+            "// eslint-disable-next-line no-console -- see PAIR-3\nexport {};\n",
+            "names a ticket",
+        ),
+        ("src.py", "x = 1  # it used to be a list\n", "narrates history"),
     ],
 )
 def test_a_comment_with_banned_content_fails_and_the_comments_line_does_not_lift_it(
@@ -330,6 +338,11 @@ def test_a_comment_with_banned_content_fails_and_the_comments_line_does_not_lift
     assert output.startswith("comment-content: FAIL 1 problem(s)")
     assert f"  {path}:1: " in output
     assert message in output
+
+
+def test_an_ordinary_sentence_with_used_to_passes(tmp_path):
+    text = "x = 1  # the key used to sign the token\n"
+    assert content_output(tmp_path, {"src.py": text}).startswith("comment-content: ok")
 
 
 def test_the_same_words_in_a_string_or_in_code_pass(tmp_path):
@@ -388,6 +401,13 @@ def test_a_docstring_that_says_more_passes(tmp_path):
         ("src.py", "import os  # noqa: ERA001\n"),
         ("src.py", "import os  # noqa: F401, FIX002\n"),
         ("src.py", "# ruff: noqa\nx = 1\n"),
+        ("src.py", "# flake8: noqa\nx = 1\n"),
+        ("src.py", "# flake8: noqa: ERA001\nx = 1\n"),
+        ("src.py", "# ruff: disable[ERA001]\nx = 1\n"),
+        ("src.py", "# ruff: file-ignore[FIX002]\nx = 1\n"),
+        ("web/a.ts", '/* eslint no-warning-comments: "off" */\nexport {};\n'),
+        ("web/a.ts", "/* eslint no-warning-comments: 0 */\nexport {};\n"),
+        ("web/a.ts", '/*eslint no-warning-comments: ["off"] */\nexport {};\n'),
         ("web/a.ts", "// eslint-disable-next-line\nexport {};\n"),
         ("web/a.ts", "/* eslint-disable */\nexport {};\n"),
         ("web/a.ts", "// eslint-disable-next-line no-warning-comments\nexport {};\n"),
@@ -397,13 +417,15 @@ def test_a_docstring_that_says_more_passes(tmp_path):
 def test_switching_off_a_comment_lint_rule_or_all_rules_fails(tmp_path, path, text):
     output = content_output(tmp_path, {path: text})
     assert output.startswith("comment-content: FAIL")
-    assert "switches off" in output
+    assert "lint rule" in output
 
 
 @pytest.mark.parametrize(
     ("path", "text"),
     [
         ("src.py", "def f(N803):  # noqa: N803\n    return N803\n"),
+        ("src.py", "# ruff: disable[E501]\nx = 1\n# ruff: enable[E501]\n"),
+        ("web/a.ts", '/* eslint no-console: "off" */\nexport {};\n'),
         (
             "web/a.ts",
             "// eslint-disable-next-line react-hooks/exhaustive-deps\nexport {};\n",
@@ -426,17 +448,20 @@ def test_header_lines_skip_blank_lines_and_stop_at_code():
 ```
 
 - [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py -q`. Expected: collection error `No module named 'comment_content'` (red).
-- [ ] **Step 3:** create `scripts/rules/comment-projects.txt`: one lowercase name per line, the directory names of every repository in the table "The workspace" of the workspace `AGENTS.md` (read it there; this plan does not repeat the names).
+- [ ] **Step 3:** create `scripts/rules/comment-projects.txt`: one lowercase name per line, the names of the owner's other public repositories as the coordinator lists them on BLOG-62 (read them there; this plan does not repeat them). Leave out this repo's own name and every private repository: this file is in a public repo.
+- [ ] **Step 3a:** in `scripts/rules/comment-directives.txt` replace `python	^(pyright|ruff|isort|pylint|mypy):` with `python	^(pyright|ruff|flake8|isort|pylint|mypy):` and add the row `ts	^eslint\s` after the row `ts	^eslint-(disable|enable)` (tab-separated like every row): an inline ESLint configuration comment is a tool directive, and a `flake8:` comment too.
 - [ ] **Step 4:** create `scripts/rules/comment-content-patterns.txt` (tab-separated `kind`, language, regex, message; no blank lines):
 
 ```
 content	all	\b(BLOG|PW|CKE|TA|PP|RR|PAIR)-\d+\b	names a ticket: delete the reference
 content	all	(?i)\b(docs/(specs|plans)/|superpowers)	points at a spec or a plan: delete the pointer
-content	all	(?i)\b(used to|no longer|git history|removed in|previously|formerly|before this change|after this change|this pr|this ticket)\b	narrates history: delete it
+content	all	(?i)\b(used to be|(it|this|we|which) used to|no longer|git history|removed in|previously|formerly|before this change|after this change|this pr|this ticket)\b	narrates history: delete it
 disable	python	(?i)\bnoqa\b(?!\s*:)	switches off every lint rule: delete it
-disable	python	(?i)\bnoqa\s*:.*\b(ERA|FIX)\d*\b	switches off a comment lint rule: delete it
+disable	python	(?i)\bnoqa\s*:.*\b(ERA\d*|FIX\d*|ALL)\b	switches off a comment lint rule: delete it
+disable	python	\bruff:\s*(disable|enable|file-ignore|ignore)\s*\[[^\]]*\b(ERA\d*|FIX\d*|ALL)\b	switches off a comment lint rule: delete it
 disable	ts	eslint-(disable|enable)(-next-line|-line)?\s*(--.*)?(\*/)?\s*$	switches off every lint rule: delete it
 disable	ts	eslint-disable.*\bno-warning-comments\b	switches off a comment lint rule: delete it
+disable	ts	eslint\s+[^*]*\bno-warning-comments\b	changes a comment lint rule: delete it
 ```
 
 - [ ] **Step 5:** create `scripts/rules/comment_content.py`:
@@ -522,12 +547,12 @@ def problems(path: str, source: str, language: str, found: list[Comment]) -> lis
     out: list[str] = []
     for comment in found:
         for kind, scope, pattern, message in PATTERNS:
-            wanted = "disable" if comment.directive else "content"
-            if kind != wanted or scope not in ("all", language):
+            applies = kind == "content" or comment.directive
+            if not applies or scope not in ("all", language):
                 continue
             if pattern.search(comment.text):
                 out.append(f"{path}:{comment.line}: {message}")
-        if not comment.directive and PROJECT_NAME.search(comment.text):
+        if PROJECT_NAME.search(comment.text):
             out.append(
                 f"{path}:{comment.line}: names a project: "
                 "state the constraint on its own"
@@ -605,11 +630,13 @@ if __name__ == "__main__":
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 PYPROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
+CODES = ["ERA001", "FIX001", "FIX002", "FIX003", "FIX004"]
 
 
 def rule_codes(tmp_path: Path, source: str) -> set[str]:
@@ -650,6 +677,17 @@ def test_commented_out_code_and_marker_comments_are_reported(tmp_path, source, c
 
 def test_an_ordinary_comment_is_left_to_the_rules_job(tmp_path):
     assert rule_codes(tmp_path, "# a constraint\nx = 1\n") == set()
+
+
+def test_no_ignore_turns_a_comment_rule_off():
+    lint = tomllib.loads(PYPROJECT.read_text())["tool"]["ruff"]["lint"]
+    ignored = [*lint.get("ignore", []), *lint.get("extend-ignore", [])]
+    for codes in [
+        *lint.get("per-file-ignores", {}).values(),
+        *lint.get("extend-per-file-ignores", {}).values(),
+    ]:
+        ignored += codes
+    assert [c for c in CODES for i in ignored if c.startswith(i) or i == "ALL"] == []
 ```
 
 - [ ] **Step 2:** create `frontend/tests/lint-settings.test.ts`:
@@ -680,11 +718,19 @@ describe("comment lint settings", () => {
       "no-warning-comments",
     );
   });
+
+  it.each(["components/PostEditor.tsx", "lib/proxy.ts", "tests/hardening.test.ts"])(
+    "keeps no-warning-comments an error for %s",
+    async (path) => {
+      const config = await new ESLint({ cwd: process.cwd() }).calculateConfigForFile(path);
+      expect(config.rules?.["no-warning-comments"]?.[0]).toBe(2);
+    },
+  );
 });
 ```
 
 (the first line of this file is a Vitest environment directive, not a comment of ours.)
-- [ ] **Step 3:** red runs: `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_lint_settings.py -q` (expected: 5 failed, 1 passed) and `cd frontend && npx vitest run tests/lint-settings.test.ts` (expected: 4 failed, 1 passed).
+- [ ] **Step 3:** red runs: `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_lint_settings.py -q` (expected: 5 failed, 2 passed: the ignore assertion passes already) and `cd frontend && npx vitest run tests/lint-settings.test.ts` (expected: 7 failed, 1 passed).
 - [ ] **Step 4:** in `backend/pyproject.toml` replace `select = ["E4", "E7", "E9", "F", "I"]` with `select = ["E4", "E7", "E9", "F", "I", "ERA001", "FIX001", "FIX002", "FIX003", "FIX004"]`. In `frontend/eslint.config.mjs` insert before `globalIgnores(`:
 
 ```js
@@ -698,7 +744,7 @@ describe("comment lint settings", () => {
   },
 ```
 
-- [ ] **Step 5:** green runs: both commands of Step 3 (expected: `6 passed`; `5 passed`), then `cd backend && poetry run ruff check . ../scripts/rules` and `cd frontend && npm run lint`. Expected: no findings in either (measured on `main`).
+- [ ] **Step 5:** green runs: both commands of Step 3 (expected: `7 passed`; `8 passed`), then `cd backend && poetry run ruff check . ../scripts/rules` and `cd frontend && npm run lint`. Expected: no findings in either (measured on `main`).
 - [ ] **Step 6:** `git add backend frontend && git commit -m "Turn on the comment lint rules"`.
 
 ### Task 4: Docs and wiring

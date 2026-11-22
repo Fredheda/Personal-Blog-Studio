@@ -14,11 +14,11 @@ The amount of comments is bounded by `comment-count`. What is left must also be 
   - names a ticket (`BLOG-12`, `PAIR-3` and the other project keys);
   - points at a spec or a plan (`docs/specs/`, `docs/plans/`, `superpowers`);
   - names another project of the workspace (names in `scripts/rules/comment-projects.txt`);
-  - narrates history (used to, no longer, git history, removed in, previously, formerly, before or after this change, this PR, this ticket);
+  - narrates history (used to be, it, this, we or which used to, no longer, git history, removed in, previously, formerly, before or after this change, this PR, this ticket; "the key used to sign the token" passes);
   - sits in a file header longer than 3 comment lines (the comment lines, a module docstring included, before the first line of code; shebang and tool directives are skipped);
   - is a Python docstring whose words, leaving out filler words, are all words of the function or class name and its parameter names.
-- A guard in the same rule: a tool directive that switches off every lint rule on its line (`noqa` without a code, `ruff: noqa`, `eslint-disable` without a rule name) or that names `ERA`, `FIX` or `no-warning-comments` fails.
-- Patterns are data, not code: `scripts/rules/comment-content-patterns.txt` (`kind`, language, regex and the message, tab separated) and `scripts/rules/comment-projects.txt`. Changing one is a visible diff in a PR the owner reviews. The scripts stay byte-identical across repos; the data files carry the same lists.
+- A guard in the same rule, over every suppression form of the locked tools: a directive comment fails when it switches off every lint rule (`noqa` without a code, `ruff: noqa`, `flake8: noqa`, `eslint-disable` without a rule name) or names `ERA`, `FIX` or `no-warning-comments`: `noqa` with such a code, Ruff's range and file forms (`ruff: disable[...]`, `ruff: enable[...]`, `ruff: file-ignore[...]`), ESLint's `eslint-disable*` comments and its inline configuration form (`/* eslint no-warning-comments: "off" */`, also `0`). Each settings test also asserts that no Ruff `ignore` or `per-file-ignores` entry and no ESLint override in the computed configuration of real paths turns these rules off.
+- Patterns are data, not code: `scripts/rules/comment-content-patterns.txt` (`kind`, language, regex and the message, tab separated) and `scripts/rules/comment-projects.txt`. Changing one is a visible diff in a PR the owner reviews. The scripts stay byte-identical across repos; the pattern file is the same everywhere, the project list is repo data: it leaves out the repo's own name and lists only the owner's public repositories.
 - Each behaviour has a violating test input written and run red before the code.
 
 ## No escape
@@ -33,7 +33,7 @@ The `Comments:` line of `comment-count` does not lift any of these failures (own
 
 - The three tokenizers of `comment-count` return the comments themselves instead of only a count: a `Comment` holds the first and last line, the text, whether it is a tool directive and, for a docstring, the words of the owner's name and parameters. `count` stays the number of lines of the comments that are not directives, so `comment-count` behaves as before.
 - Directive comments are kept in the list, flagged, so the guard sees them and the header check can skip them.
-- Content patterns apply to comments that are not directives; guard patterns apply to directives. A pattern has a language (`all`, `python`, `ts`, `hash`).
+- Content patterns and the project names apply to every comment, a tool directive included (text after a directive cannot hide a ticket key); guard patterns apply to directives only. A pattern has a language (`all`, `python`, `ts`, `hash`).
 - Project names are matched as whole words, ignoring case.
 
 ## Constraints
