@@ -8,6 +8,10 @@ def git(*args: str) -> str:
     ).stdout
 
 
+def diff(*flags: str) -> str:
+    return git("diff", *flags, merge_base(), "HEAD")
+
+
 def merge_base() -> str:
     return git(
         "merge-base", os.environ.get("BASE_SHA") or "origin/main", "HEAD"

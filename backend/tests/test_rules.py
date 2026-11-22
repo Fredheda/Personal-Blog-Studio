@@ -51,20 +51,20 @@ def rows(count: int, lines: int = 1, path: str = "src/file{}.py") -> str:
 
 
 def test_26_files_fail():
-    assert "26 files" in present(pr_size.check(rows(26), override=False))
+    assert "26 files" in present(pr_size.check(*pr_size.measure(rows(26))))
 
 
 def test_25_files_pass():
-    assert pr_size.check(rows(25), override=False) is None
+    assert pr_size.check(*pr_size.measure(rows(25))) is None
 
 
 def test_5001_lines_fail():
-    problem = pr_size.check("5001\t0\tsrc/big.py\n", override=False)
+    problem = pr_size.check(*pr_size.measure("5001\t0\tsrc/big.py\n"))
     assert "5001 lines" in present(problem)
 
 
 def test_5000_lines_pass():
-    assert pr_size.check("2500\t2500\tsrc/big.py\n", override=False) is None
+    assert pr_size.check(*pr_size.measure("2500\t2500\tsrc/big.py\n")) is None
 
 
 def test_lockfiles_fixtures_docs_and_generated_files_do_not_count():
@@ -87,10 +87,6 @@ def test_a_rename_counts_once_at_its_new_path():
     assert pr_size.measure("0\t0\tsrc/{old => new}/x.py\n") == (1, 0)
     assert pr_size.measure("0\t0\tCLAUDE.md => AGENTS.md\n") == (1, 0)
     assert pr_size.measure("0\t0\tdocs/{a.md => b.md}\n") == (0, 0)
-
-
-def test_an_override_lifts_the_limit():
-    assert pr_size.check(rows(26), override=True) is None
 
 
 def label(event: str, actor: str, name: str = "size-override") -> dict:

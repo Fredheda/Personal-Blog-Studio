@@ -2,6 +2,7 @@ from pathlib import Path
 
 import comment_count
 import pytest
+
 from tests.rules_support import commit_all, make_repo, run_rules
 
 

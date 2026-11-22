@@ -138,7 +138,7 @@ def description() -> str | None:
 
 def main() -> int:
     base = common.merge_base()
-    rows = changed(common.git("diff", "--name-status", "-M", base, "HEAD"))
+    rows = changed(common.diff("--name-status", "-M"))
     counts, allowed, unreadable = tally(rows, base)
     flagged = sorted(set(growth(counts)) | set(over_floor(counts, allowed)))
     given = paths_with_reason(description()) if flagged else set()

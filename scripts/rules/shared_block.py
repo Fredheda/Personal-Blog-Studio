@@ -49,9 +49,7 @@ def main(argv: list[str]) -> int:
     if problem:
         print(f"shared-block: FAIL {problem}")
         return 1
-    changed = common.git(
-        "diff", "--name-only", "-M", common.merge_base(), "HEAD"
-    ).splitlines()
+    changed = common.diff("--name-only", "-M").splitlines()
     print(
         "shared-block: ok (hash file changed in this PR)"
         if hash_file_changed(changed)
