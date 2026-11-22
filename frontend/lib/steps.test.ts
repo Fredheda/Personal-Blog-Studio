@@ -58,12 +58,12 @@ test("relative time counts from the given instant", () => {
 });
 
 test.each([
-  ["saved", { marker: "done", text: "Saved 2 min ago" }],
-  ["pending", { marker: "active", text: "Unsaved changes" }],
-  ["saving", { marker: "active", text: "Saving…" }],
-  ["details", { marker: "attention", text: "Unsaved details. Press Save." }],
-  ["failed", { marker: "failed", text: "Not saved. Your next edit or Save tries again." }],
-  ["conflict", { marker: "failed", text: "Not saved: the post changed elsewhere." }],
+  ["saved", { marker: "done", text: "Saved 2 min ago", chip: "Saved" }],
+  ["pending", { marker: "active", text: "Unsaved changes", chip: "Unsaved changes" }],
+  ["saving", { marker: "active", text: "Saving…", chip: "Saving…" }],
+  ["details", { marker: "attention", text: "Unsaved details. Press Save.", chip: "Unsaved details" }],
+  ["failed", { marker: "failed", text: "Not saved. Your next edit or Save tries again.", chip: "Not saved" }],
+  ["conflict", { marker: "failed", text: "Not saved: the post changed elsewhere.", chip: "Not saved" }],
 ] as [SaveKind, object][])("Write step in %s (spec 7.5)", (kind, view) => {
   expect(writeStep(kind, "2 min ago")).toEqual(view);
 });
@@ -85,6 +85,16 @@ test.each([
   expect([view.marker, view.text]).toEqual([marker, text]);
 });
 
+test.each([
+  ["pending", { phase: "done", problems: [] }, "Waiting"],
+  ["saved", { phase: "running" }, "Checking…"],
+  ["saved", { phase: "done", problems: [] }, "No problems"],
+  ["saved", { phase: "done", problems }, "2 to fix"],
+  ["saved", { phase: "failed" }, "Could not check"],
+] as [SaveKind, CheckState, string][])("Check chip: %s, %j", (kind, check, chip) => {
+  expect(checkStep(kind, check).chip).toBe(chip);
+});
+
 test("Check keeps the problems of a finished check and hides them while a save is due", () => {
   expect(checkStep("saved", { phase: "done", problems }).problems).toEqual(problems);
   expect(checkStep("details", { phase: "done", problems }).problems).toEqual([]);
@@ -97,6 +107,12 @@ const draft = {
   slug: "hello",
 };
 const clean: CheckState = { phase: "done", problems: [] };
+
+test("Publish chip says Published or Not published", () => {
+  expect(publishStep({ ...draft, published: true, version: 1, versionPublishedAt: null }, "saved", clean).chip).toBe("Published");
+  expect(publishStep(draft, "saved", clean).chip).toBe("Not published");
+  expect(publishStep(draft, "pending", clean).chip).toBe("Not published");
+});
 
 test.each([
   [{ ...draft, published: true, version: 3, versionPublishedAt: "2026-11-09T10:00:00Z" }, "saved", clean,

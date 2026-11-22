@@ -8,7 +8,7 @@ export type CheckState =
   | { phase: "running" }
   | { phase: "done"; problems: CheckProblem[] }
   | { phase: "failed" };
-export type StepView = { marker: Marker; text: string };
+export type StepView = { marker: Marker; text: string; chip: string };
 
 type SaveInput = {
   conflict: boolean;
@@ -66,32 +66,38 @@ export function relativeTime(from: string, now: number): string {
 }
 
 const WRITE: Record<Exclude<SaveKind, "saved">, StepView> = {
-  conflict: { marker: "failed", text: "Not saved: the post changed elsewhere." },
-  failed: { marker: "failed", text: "Not saved. Your next edit or Save tries again." },
-  saving: { marker: "active", text: "Saving…" },
-  details: { marker: "attention", text: "Unsaved details. Press Save." },
-  pending: { marker: "active", text: "Unsaved changes" },
+  conflict: { marker: "failed", text: "Not saved: the post changed elsewhere.", chip: "Not saved" },
+  failed: { marker: "failed", text: "Not saved. Your next edit or Save tries again.", chip: "Not saved" },
+  saving: { marker: "active", text: "Saving…", chip: "Saving…" },
+  details: { marker: "attention", text: "Unsaved details. Press Save.", chip: "Unsaved details" },
+  pending: { marker: "active", text: "Unsaved changes", chip: "Unsaved changes" },
 };
 
 export function writeStep(kind: SaveKind, ago: string): StepView {
-  return kind === "saved" ? { marker: "done", text: `Saved ${ago}` } : WRITE[kind];
+  return kind === "saved" ? { marker: "done", text: `Saved ${ago}`, chip: "Saved" } : WRITE[kind];
 }
 
 export function checkStep(kind: SaveKind, check: CheckState): StepView & { problems: CheckProblem[] } {
   if (kind !== "saved") {
-    return { marker: "waiting", text: "Waits for a save", problems: [] };
+    return { marker: "waiting", text: "Waits for a save", chip: "Waiting", problems: [] };
   }
   if (check.phase === "running") {
-    return { marker: "active", text: "Checking…", problems: [] };
+    return { marker: "active", text: "Checking…", chip: "Checking…", problems: [] };
   }
   if (check.phase === "failed") {
-    return { marker: "waiting", text: "Could not check. The next save tries again.", problems: [] };
+    return {
+      marker: "waiting",
+      text: "Could not check. The next save tries again.",
+      chip: "Could not check",
+      problems: [],
+    };
   }
   const n = check.problems.length;
-  if (n === 0) return { marker: "done", text: "No problems found", problems: [] };
+  if (n === 0) return { marker: "done", text: "No problems found", chip: "No problems", problems: [] };
   return {
     marker: "attention",
     text: `${n} thing${n === 1 ? "" : "s"} to fix before publishing`,
+    chip: `${n} to fix`,
     problems: check.problems,
   };
 }
@@ -111,16 +117,18 @@ export function publishStep(
     return {
       marker: "done",
       text: `Published, version ${post.version}${on}. Publish again to send your changes.`,
+      chip: "Published",
       canUnpublish: true,
     };
   }
-  const off = (text: string) => ({ marker: "waiting" as const, text, canUnpublish: false });
+  const off = (text: string) => ({ marker: "waiting" as const, text, chip: "Not published", canUnpublish: false });
   if (kind !== "saved") return off("Off while something is unsaved");
   if (check.phase === "done" && check.problems.length > 0) return off("Off until the list above is empty");
   if (check.phase === "running") return off("Off until the check is done");
   return {
     marker: "active",
     text: post.slug ? `Not published yet. Goes live at /blog/${post.slug}` : "Not published yet.",
+    chip: "Not published",
     canUnpublish: false,
   };
 }
