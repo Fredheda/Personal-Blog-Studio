@@ -31,11 +31,15 @@ Every agent (Claude, Devin, later ones) goes through CI, so CI is the one place 
 | `spec-location` | added and renamed-to paths of the same diff | a dated `.md` or `.mmd` file (`YYYY-MM-DD-slug`) or any `.md` under a directory named `spec`, `specs`, `plan`, `plans`, `superpowers` lies outside `docs/specs/` and `docs/plans/` |
 | `shared-block` | `AGENTS.md` and `scripts/rules/shared-block.sha256` | the markers are missing or the block's sha256 differs from the recorded one |
 
-`pr-size` exclusions (the spec's list; the specialist confirms): `package-lock.json`, `poetry.lock`; any file in a directory named `fixtures`; anything under `docs/`; generated files: `openapi/v1.json` (checked against the generated schema by a test) and `frontend/next-env.d.ts`. Lines are added plus deleted. A binary file counts as a file and as zero lines. A rename counts once, at its new path.
+`pr-size` exclusions: `package-lock.json`, `poetry.lock`; any file in a directory named `fixtures`; anything under `docs/`; the paths in `scripts/rules/pr-size-generated.txt`. Lines are added plus deleted. A binary file counts as a file and as zero lines. A rename counts once, at its new path.
 
-`size-override`: in CI the rule reads the label events of the PR from the GitHub API and accepts the label only when the latest `labeled` or `unlabeled` event for it is a `labeled` by the repository owner. A failed API call counts as no override. Locally the label cannot be checked, so the limit applies.
+`size-override`: in CI the rule reads the label events of the PR from the GitHub API and accepts the label only when the latest `labeled` or `unlabeled` event for it is a `labeled` by the repository owner. A failed API call counts as no override. Locally the label cannot be checked, so the limit applies. Setting the label does not re-run the job (`labeled` is not a trigger of `ci.yml`, and stays out): the owner sets it and re-runs the job; the failure line says so.
 
-`shared-block` hash: sha256 of the block text from the start marker line to the end marker line, inclusive, lines joined with `\n` and one trailing `\n`. `scripts/rules/shared_block.py --print-hash <file>` prints it; the recorded hash is the hash of the owner's template file `agents-shared-block.md`. When the owner changes the template, the hash file changes with the matching `AGENTS.md` block in one PR.
+Limit of the check: a local Claude session runs `gh` with the owner's own login, so "set by the owner" does not separate the owner from a local agent. It does stop Devin and every other bot account. The local-agent side is closed by the owner's hook that restricts `gh` label commands in agent sessions.
+
+The `pr-size` generated-files list is data, not code: `scripts/rules/pr-size-generated.txt`, one path per line (`openapi/v1.json`, `frontend/next-env.d.ts`), so the scripts stay byte-identical across repos and only the data file differs.
+
+`shared-block` hash: sha256 of the block text from the start marker line to the end marker line, inclusive, lines joined with `\n` and one trailing `\n`. `scripts/rules/shared_block.py --print-hash <file>` prints it; the recorded hash is the hash of the owner's template file `agents-shared-block.md`. When the owner changes the template, the hash file changes with the matching `AGENTS.md` block in one PR. When a PR's diff touches the hash file the rule still compares block and hash, and on success prints `shared-block: ok (hash file changed in this PR)`, so a block and its hash cannot change together unseen.
 
 ## Where the rules read the base
 
@@ -43,6 +47,7 @@ Every agent (Claude, Devin, later ones) goes through CI, so CI is the one place 
 
 ## Constraints
 
+- The `rules` job has no `if` and no `needs`: it runs on drafts and on docs-only PRs too.
 - The CI job needs the full history (`fetch-depth: 0`) for the merge-base and the permissions `contents`, `pull-requests` and `issues` read.
 - Untrusted event values reach scripts through `env`, never through the shell line.
 - The `rules` job id must appear as `step "rules"` in `scripts/ci-local.sh` (`backend/tests/test_ci_parity.py`).

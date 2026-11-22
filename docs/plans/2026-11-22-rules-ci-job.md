@@ -14,7 +14,8 @@
 ## TL;DR
 
 - Ships: `scripts/rules/` (`run.sh`, `pr_size.py`, `spec_location.py`, `shared_block.py`, `shared-block.sha256`), `backend/tests/test_rules.py` and fixtures, CI job `rules`, a `rules` step in `ci-local.sh`, `ruff` and `pyright` also covering `scripts/rules`, one line each in `AGENTS.md` for the job and the lint line.
-- One code PR after the docs PR, about 14 files, tests first. Owner merges (`.github/`). No dependency, no cost.
+- The scripts are byte-identical across repos (W3 compares them by hash); the one repo-specific part is the data file `pr-size-generated.txt`. The `size-override` check stops Devin and other bot accounts, not a local session that runs `gh` as the owner (the owner's hook closes that side).
+- One code PR after the docs PR, about 16 files, tests first. Owner merges (`.github/`). No dependency, no cost.
 - After the job has run once on `main`, the owner decides whether `rules` becomes a required check in the `main` ruleset (not part of this work).
 - The comment count of every edited file does not grow; the new files carry no comments.
 
@@ -83,13 +84,14 @@ flowchart TB
 
 | File | Change |
 |---|---|
+| `scripts/rules/common.py` | new: `git()` and `merge_base()` shared by the rules |
 | `scripts/rules/shared_block.py`, `shared-block.sha256` | new |
-| `scripts/rules/pr_size.py` | new |
+| `scripts/rules/pr_size.py`, `pr-size-generated.txt` | new; the data file is the only repo-specific part |
 | `scripts/rules/spec_location.py` | new |
 | `scripts/rules/run.sh` | new (mode 755) |
 | `backend/tests/test_rules.py` | new |
 | `backend/tests/fixtures/rules/agents-block-good.md`, `agents-block-edited.md`, `agents-no-markers.md` | new |
-| `backend/pyproject.toml` | pyright `extraPaths` and `include` for `scripts/rules` |
+| `backend/pyproject.toml` | pytest `pythonpath`, pyright `extraPaths` and `include` for `scripts/rules` |
 | `scripts/ci-local.sh` | `rules` step; ruff on `scripts/rules` in the `backend-lint` step |
 | `.github/workflows/ci.yml` | job `rules`; ruff on `scripts/rules` in `backend-lint` |
 | `AGENTS.md` | the CI sentence lists `rules`; one line on `scripts/rules/` |
@@ -131,15 +133,14 @@ One rule.
 
 - [ ] **Step 2: failing test.** Create `backend/tests/test_rules.py` with this head and the shared-block tests (later tasks append):
 
+All imports stay in the import block at the top of the file, sorted; later tasks add their lines there, never mid-file. `scripts/rules` is on pytest's path (`pythonpath` in `backend/pyproject.toml`, Task 5 Step 1; add it now with the first test).
+
 ```python
-import sys
 from pathlib import Path
 
+import shared_block
+
 RULES = Path(__file__).resolve().parents[2] / "scripts" / "rules"
-sys.path.insert(0, str(RULES))
-
-import shared_block  # noqa: E402
-
 FIXTURES = Path(__file__).parent / "fixtures" / "rules"
 GOOD = (FIXTURES / "agents-block-good.md").read_text()
 RECORDED = shared_block.digest(shared_block.extract(GOOD))
@@ -168,18 +169,43 @@ def test_an_edited_block_fails():
 def test_missing_markers_fail():
     text = (FIXTURES / "agents-no-markers.md").read_text()
     assert "no shared block" in shared_block.check(text, RECORDED)
+
+
+def test_the_hash_file_in_a_diff_is_noticed():
+    assert shared_block.hash_file_changed(["a.py", "scripts/rules/shared-block.sha256"]) is True
+    assert shared_block.hash_file_changed(["AGENTS.md"]) is False
 ```
 
+In `backend/pyproject.toml` set `pythonpath = [".", "../scripts/rules"]` under `[tool.pytest.ini_options]` now (Task 5 Step 1 adds the pyright part).
+
 - [ ] **Step 3: red.** `cd backend && poetry run pytest tests/test_rules.py -q`. Expected: FAIL, `ModuleNotFoundError: No module named 'shared_block'`.
-- [ ] **Step 4: implement** `scripts/rules/shared_block.py`:
+- [ ] **Step 4: implement** `scripts/rules/common.py`:
+
+```python
+import os
+import subprocess
+
+
+def git(*args: str) -> str:
+    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+
+def merge_base() -> str:
+    return git("merge-base", os.environ.get("BASE_SHA") or "origin/main", "HEAD").strip()
+```
+
+and `scripts/rules/shared_block.py`:
 
 ```python
 import hashlib
 import sys
 from pathlib import Path
 
+import common
+
 START = "<!-- shared:start -->"
 END = "<!-- shared:end -->"
+HASH_FILE = "scripts/rules/shared-block.sha256"
 RECORDED = Path(__file__).with_name("shared-block.sha256")
 
 
@@ -206,6 +232,10 @@ def check(agents_text: str, recorded: str) -> str | None:
     return None
 
 
+def hash_file_changed(changed: list[str]) -> bool:
+    return HASH_FILE in changed
+
+
 def main(argv: list[str]) -> int:
     if argv[1:2] == ["--print-hash"]:
         block = extract(Path(argv[2]).read_text())
@@ -218,7 +248,8 @@ def main(argv: list[str]) -> int:
     if problem:
         print(f"shared-block: FAIL {problem}")
         return 1
-    print("shared-block: ok")
+    changed = common.git("diff", "--name-only", "-M", common.merge_base(), "HEAD").splitlines()
+    print("shared-block: ok (hash file changed in this PR)" if hash_file_changed(changed) else "shared-block: ok")
     return 0
 
 
@@ -227,15 +258,15 @@ if __name__ == "__main__":
 ```
 
 - [ ] **Step 5: green.** Same command. Expected: PASS (5 tests).
-- [ ] **Step 6: record the hash.** `python3 scripts/rules/shared_block.py --print-hash /path/to/templates/agents-shared-block.md > scripts/rules/shared-block.sha256` (the owner's template file in the workspace; its text and the `AGENTS.md` block are identical). Then `python3 scripts/rules/shared_block.py`. Expected: `shared-block: ok`.
+- [ ] **Step 6: record the hash.** `python3 scripts/rules/shared_block.py --print-hash /path/to/templates/agents-shared-block.md > scripts/rules/shared-block.sha256` (the owner's template file in the workspace; its text and the `AGENTS.md` block are identical). Then `python3 scripts/rules/shared_block.py`. Expected: `shared-block: ok (hash file changed in this PR)` while the hash file is part of the branch's diff, `shared-block: ok` otherwise.
 - [ ] **Step 7: mutation check.** In `check`, compare with `!=` replaced by `==`: the "untouched block passes" and "edited block fails" tests fail. Revert.
-- [ ] **Step 8: commit.** `git add scripts/rules backend/tests/test_rules.py backend/tests/fixtures/rules && git commit -m "Add the shared-block rule"`
+- [ ] **Step 8: commit.** `git add scripts/rules backend/pyproject.toml backend/tests/test_rules.py backend/tests/fixtures/rules && git commit -m "Add the shared-block rule"`
 
 ### Task 2: rule `pr-size`
 
 **Files:** modify `backend/tests/test_rules.py`; create `scripts/rules/pr_size.py`.
 
-- [ ] **Step 1: failing tests.** Add `import pr_size  # noqa: E402` under the first import and append:
+- [ ] **Step 1: failing tests.** Add `import pr_size` to the import block at the top (sorted, before `import shared_block`) and append:
 
 ```python
 def rows(count: int, lines: int = 1, path: str = "src/file{}.py") -> str:
@@ -306,7 +337,14 @@ def test_other_labels_do_not_count():
 ```
 
 - [ ] **Step 2: red.** Same command. Expected: FAIL, no module `pr_size`.
-- [ ] **Step 3: implement** `scripts/rules/pr_size.py`:
+- [ ] **Step 3: implement.** First the data file `scripts/rules/pr-size-generated.txt` (one path per line, the only repo-specific part of the rule):
+
+```
+openapi/v1.json
+frontend/next-env.d.ts
+```
+
+then `scripts/rules/pr_size.py`:
 
 ```python
 import json
@@ -314,12 +352,15 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
+
+import common
 
 MAX_FILES = 25
 MAX_LINES = 5000
 LABEL = "size-override"
 LOCKFILES = {"package-lock.json", "poetry.lock"}
-GENERATED = {"openapi/v1.json", "frontend/next-env.d.ts"}
+GENERATED = set(Path(__file__).with_name("pr-size-generated.txt").read_text().split())
 
 
 def new_path(path: str) -> str:
@@ -368,7 +409,7 @@ def check(numstat: str, override: bool) -> str | None:
         return None
     return (
         f"{files} files and {lines} lines (limit {MAX_FILES} and {MAX_LINES}); "
-        f"split the PR, or the owner sets the label {LABEL}"
+        f"split the PR, or the owner sets the label {LABEL} and re-runs this job"
     )
 
 
@@ -393,13 +434,8 @@ def override_granted() -> bool:
     return label_granted(events, owner)
 
 
-def git(*args: str) -> str:
-    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
-
-
 def main() -> int:
-    base = git("merge-base", os.environ.get("BASE_SHA") or "origin/main", "HEAD").strip()
-    numstat = git("diff", "--numstat", "-M", base, "HEAD")
+    numstat = common.git("diff", "--numstat", "-M", common.merge_base(), "HEAD")
     problem = check(numstat, override=False)
     if problem and override_granted():
         problem = None
@@ -417,13 +453,13 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: green.** `poetry run pytest tests/test_rules.py -q`. Expected: PASS.
 - [ ] **Step 5: mutation checks.** (a) change `<=` to `<` in `check`: the "25 files pass" test fails. (b) drop the `"fixtures" in parts[:-1]` clause: the exclusion test fails. (c) in `label_granted` drop the `actor == owner` part: "another account" fails. (d) drop the `unlabeled` handling (make `granted = True` on any label event): "removed label" fails. Revert each.
-- [ ] **Step 6: commit.** `git add scripts/rules/pr_size.py backend/tests/test_rules.py && git commit -m "Add the pr-size rule"`
+- [ ] **Step 6: commit.** `git add scripts/rules/pr_size.py scripts/rules/pr-size-generated.txt backend/tests/test_rules.py && git commit -m "Add the pr-size rule"`
 
 ### Task 3: rule `spec-location`
 
 **Files:** modify `backend/tests/test_rules.py`; create `scripts/rules/spec_location.py`.
 
-- [ ] **Step 1: failing tests.** Add `import spec_location  # noqa: E402` and append:
+- [ ] **Step 1: failing tests.** Add `import spec_location` to the import block at the top (sorted, after `import shared_block`) and append:
 
 ```python
 def test_a_dated_spec_outside_the_spec_folders_fails():
@@ -457,10 +493,10 @@ def test_added_and_renamed_to_paths_are_read_from_name_status():
 - [ ] **Step 3: implement** `scripts/rules/spec_location.py`:
 
 ```python
-import os
 import re
-import subprocess
 import sys
+
+import common
 
 ALLOWED = ("docs/specs/", "docs/plans/")
 DATED = re.compile(r"(^|/)\d{4}-\d{2}-\d{2}-[^/]+\.(md|mmd)$")
@@ -487,13 +523,8 @@ def added_paths(name_status: str) -> list[str]:
     return paths
 
 
-def git(*args: str) -> str:
-    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
-
-
 def main() -> int:
-    base = git("merge-base", os.environ.get("BASE_SHA") or "origin/main", "HEAD").strip()
-    bad = misplaced(added_paths(git("diff", "--name-status", "-M", base, "HEAD")))
+    bad = misplaced(added_paths(common.git("diff", "--name-status", "-M", common.merge_base(), "HEAD")))
     if bad:
         print("spec-location: FAIL specs and plans belong in docs/specs and docs/plans")
         for path in bad:
@@ -515,14 +546,9 @@ if __name__ == "__main__":
 
 **Files:** modify `backend/tests/test_rules.py`; create `scripts/rules/run.sh`.
 
-- [ ] **Step 1: failing tests.** Append (a throwaway git repo carries a copy of the rules and a base commit):
+- [ ] **Step 1: failing tests.** Add `import os`, `import shutil` and `import subprocess` to the top of the import block (stdlib lines first, then a blank line, then `from pathlib import Path` stays with them: `import os`, `import shutil`, `import subprocess`, `from pathlib import Path`, blank line, `import pr_size`, ...). Append (a throwaway git repo carries a copy of the rules and a base commit):
 
 ```python
-import os
-import shutil
-import subprocess
-
-
 def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
     shutil.copytree(RULES, tmp_path / "scripts" / "rules", ignore=shutil.ignore_patterns("__pycache__"))
     (tmp_path / "scripts" / "rules" / "shared-block.sha256").write_text(RECORDED + "\n")
@@ -530,7 +556,7 @@ def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
     for step in (
         ["init", "-q", "-b", "main"],
         ["add", "-A"],
-        ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"],
+        ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"],
     ):
         subprocess.run(["git", *step], cwd=tmp_path, check=True)
     return tmp_path
@@ -539,7 +565,7 @@ def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
 def commit_all(repo: Path) -> None:
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "change"],
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "change"],
         cwd=repo,
         check=True,
     )
@@ -604,6 +630,19 @@ def test_an_edited_shared_block_fails_shared_block_only(tmp_path):
     assert result.returncode == 1
     assert "shared-block: FAIL" in result.stdout
     assert "spec-location: ok" in result.stdout
+
+
+def test_a_block_and_its_hash_changed_together_are_flagged(tmp_path):
+    repo = make_repo(tmp_path)
+    edited = (FIXTURES / "agents-block-edited.md").read_text()
+    (repo / "AGENTS.md").write_text(edited)
+    (repo / "scripts" / "rules" / "shared-block.sha256").write_text(
+        shared_block.digest(shared_block.extract(edited)) + "\n"
+    )
+    commit_all(repo)
+    result = run_rules(repo)
+    assert result.returncode == 0
+    assert "shared-block: ok (hash file changed in this PR)" in result.stdout
 ```
 
 - [ ] **Step 2: red.** `poetry run pytest tests/test_rules.py -q`. Expected: the four new tests FAIL (no `run.sh`).
@@ -660,7 +699,7 @@ Run `cd backend && poetry run pytest tests/test_ci_parity.py -q`. Expected: it f
           GH_TOKEN: ${{ github.token }}
 ```
 
-(Copy the `uses:` line with its pin from the neighbouring jobs; keep the comment form they use.) Run `cd backend && poetry run pytest tests/test_ci_parity.py -q`. Expected: PASS.
+(Copy the `uses:` line with its pin from the neighbouring jobs; keep the comment form they use.) The job has no `if` and no `needs`: it runs on drafts and on docs-only PRs. Do not add `labeled` to the `on.pull_request.types` of `ci.yml`: setting the label does not re-run the job, the owner re-runs it (the failure line says so). Run `cd backend && poetry run pytest tests/test_ci_parity.py -q`. Expected: PASS.
 - [ ] **Step 4: commit.** `git add backend/pyproject.toml scripts/ci-local.sh .github/workflows/ci.yml && git commit -m "Run the rules locally and in CI"`
 
 ### Task 6: docs, cleanup, local CI, PR
