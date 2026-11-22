@@ -44,6 +44,7 @@ def comments(source: str) -> list[Comment]:
                         line,
                         token.string,
                         directives.is_directive(token.string, "python"),
+                        own_line=not token.line[: token.start[1]].strip(),
                     )
                 )
         tree = ast.parse(source)

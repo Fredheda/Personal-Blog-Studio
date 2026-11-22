@@ -105,6 +105,13 @@ def test_typescript_comments_mark_the_shebang_and_directives():
     assert [(c.line, c.directive) for c in found] == [(1, True), (2, True), (3, False)]
 
 
+def test_typescript_and_python_comments_know_whether_they_start_the_line():
+    ts = comment_ts.comments("const a = 1; // a\n  // b\n/* c */ const d = 2;\n")
+    assert [c.own_line for c in ts] == [False, True, True]
+    py = comment_python.comments("a = 1  # a\n    # b\n")
+    assert [c.own_line for c in py] == [False, True]
+
+
 def test_hash_comments_mark_directives():
     found = comment_hash.comments("#!/bin/sh\n# note\nx=1\n")
     assert [(c.line, c.directive) for c in found] == [(1, True), (2, False)]

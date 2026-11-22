@@ -55,7 +55,7 @@ PROJECT_NAME = re.compile(r"(?i)\b(" + "|".join(map(re.escape, NAMES)) + r")\b")
 
 
 def header_lines(source: str, found: list[Comment]) -> int:
-    covered = comment_model.lines(found)
+    covered = comment_model.lines(found, own_line=True)
     skipped = comment_model.lines(found, directive=True)
     total = 0
     for number, text in enumerate(source.splitlines(), 1):

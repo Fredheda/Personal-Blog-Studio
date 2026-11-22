@@ -64,15 +64,15 @@ flowchart TB
 
 ### Task 0: Worktree and baseline
 
-- [ ] **Step 1:** from the repo's main checkout, after the docs PR merged and `git pull --ff-only`: `git -C Personal-Blog-Studio worktree add ../.worktrees/Personal-Blog-Studio-commentcontent -b feat/comment-content-rule origin/main`.
-- [ ] **Step 2:** `cd .worktrees/Personal-Blog-Studio-commentcontent/backend && poetry install && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`; `cd ../frontend && npm ci --ignore-scripts`. Expected: all pass.
-- [ ] **Step 3:** comment BLOG-62 "Starting code PR".
+- [x] **Step 1:** from the repo's main checkout, after the docs PR merged and `git pull --ff-only`: `git -C Personal-Blog-Studio worktree add ../.worktrees/Personal-Blog-Studio-commentcontent -b feat/comment-content-rule origin/main`.
+- [x] **Step 2:** `cd .worktrees/Personal-Blog-Studio-commentcontent/backend && poetry install && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`; `cd ../frontend && npm ci --ignore-scripts`. Expected: all pass.
+- [x] **Step 3:** comment BLOG-62 "Starting code PR".
 
 ### Task 1: Tokenizers return the comments
 
 **Files:** create `scripts/rules/comment_model.py`; modify `scripts/rules/comment_python.py`, `comment_hash.py`, `comment_ts.py`, `comment_count.py`; modify `backend/tests/test_comment_tokens.py`.
 
-- [ ] **Step 1:** append to `backend/tests/test_comment_tokens.py` (add `import comment_model` is not needed; the tests call the modules):
+- [x] **Step 1:** append to `backend/tests/test_comment_tokens.py` (add `import comment_model` is not needed; the tests call the modules):
 
 ```python
 def test_python_comments_carry_the_owner_words_of_a_docstring():
@@ -99,8 +99,8 @@ def test_hash_comments_mark_directives():
     assert [(c.line, c.directive) for c in found] == [(1, True), (2, False)]
 ```
 
-- [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py -q`. Expected: 3 failures, `module 'comment_python' has no attribute 'comments'` (red).
-- [ ] **Step 3:** create `scripts/rules/comment_model.py`:
+- [x] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py -q`. Expected: 3 failures, `module 'comment_python' has no attribute 'comments'` (red).
+- [x] **Step 3:** create `scripts/rules/comment_model.py`:
 
 ```python
 from typing import NamedTuple
@@ -123,7 +123,7 @@ def lines(found: list[Comment], directive: bool = False) -> set[int]:
     }
 ```
 
-- [ ] **Step 4:** replace the whole of `scripts/rules/comment_python.py` with:
+- [x] **Step 4:** replace the whole of `scripts/rules/comment_python.py` with:
 
 ```python
 import ast
@@ -191,7 +191,7 @@ def count(source: str) -> int:
     return len(comment_model.lines(comments(source)))
 ```
 
-- [ ] **Step 5:** replace the whole of `scripts/rules/comment_hash.py` with:
+- [x] **Step 5:** replace the whole of `scripts/rules/comment_hash.py` with:
 
 ```python
 import comment_model
@@ -211,7 +211,7 @@ def count(source: str) -> int:
     return len(comment_model.lines(comments(source)))
 ```
 
-- [ ] **Step 6:** in `scripts/rules/comment_ts.py`: replace the line `import directives` with the three lines `import comment_model`, `import directives`, `from comment_model import Comment`; then replace the block from `def count(source: str) -> int:` through the end of the `record` function with:
+- [x] **Step 6:** in `scripts/rules/comment_ts.py`: replace the line `import directives` with the three lines `import comment_model`, `import directives`, `from comment_model import Comment`; then replace the block from `def count(source: str) -> int:` through the end of the `record` function with:
 
 ```python
 def count(source: str) -> int:
@@ -240,7 +240,7 @@ def comments(source: str) -> list[Comment]:
 
 and replace the final line `    return len(lines)` of that function with `    return found`.
 
-- [ ] **Step 7:** in `scripts/rules/comment_count.py`: add `from types import ModuleType` after `from pathlib import PurePosixPath`; replace the `SUFFIX_COUNTERS` dictionary and the `counter_for` function with:
+- [x] **Step 7:** in `scripts/rules/comment_count.py`: add `from types import ModuleType` after `from pathlib import PurePosixPath`; replace the `SUFFIX_COUNTERS` dictionary and the `counter_for` function with:
 
 ```python
 SUFFIX_MODULES: dict[str, ModuleType] = {
@@ -275,14 +275,14 @@ def counter_for(path: str) -> Callable[[str], int] | None:
     return module.count if module else None
 ```
 
-- [ ] **Step 8:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py tests/test_comment_count.py tests/test_rules.py -q`. Expected: all pass (every `comment-count` test unchanged).
-- [ ] **Step 9:** `git add scripts/rules backend/tests && git commit -m "Return the comments themselves from the tokenizers"`.
+- [x] **Step 8:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_tokens.py tests/test_comment_count.py tests/test_rules.py -q`. Expected: all pass (every `comment-count` test unchanged).
+- [x] **Step 9:** `git add scripts/rules backend/tests && git commit -m "Return the comments themselves from the tokenizers"`.
 
 ### Task 2: The content rule
 
 **Files:** create `scripts/rules/comment-content-patterns.txt`, `scripts/rules/comment-projects.txt`, `scripts/rules/comment_content.py`, `backend/tests/test_comment_content.py`; modify `scripts/rules/run.sh`, `backend/tests/test_rules.py`, `backend/tests/test_comment_count.py`.
 
-- [ ] **Step 1:** create `backend/tests/test_comment_content.py`:
+- [x] **Step 1:** create `backend/tests/test_comment_content.py`:
 
 ```python
 from pathlib import Path
@@ -447,10 +447,10 @@ def test_header_lines_skip_blank_lines_and_stop_at_code():
     assert comment_content.header_lines(source, found) == 2
 ```
 
-- [ ] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py -q`. Expected: collection error `No module named 'comment_content'` (red).
-- [ ] **Step 3:** create `scripts/rules/comment-projects.txt`: one lowercase name per line, the names of the owner's other public repositories as the coordinator lists them on BLOG-62 (read them there; this plan does not repeat them). Leave out this repo's own name and every private repository: this file is in a public repo.
-- [ ] **Step 3a:** in `scripts/rules/comment-directives.txt` replace `python	^(pyright|ruff|isort|pylint|mypy):` with `python	^(pyright|ruff|flake8|isort|pylint|mypy):` and add the row `ts	^eslint\s` after the row `ts	^eslint-(disable|enable)` (tab-separated like every row): an inline ESLint configuration comment is a tool directive, and a `flake8:` comment too.
-- [ ] **Step 4:** create `scripts/rules/comment-content-patterns.txt` (tab-separated `kind`, language, regex, message; no blank lines):
+- [x] **Step 2:** `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py -q`. Expected: collection error `No module named 'comment_content'` (red).
+- [x] **Step 3:** create `scripts/rules/comment-projects.txt`: one lowercase name per line, the names of the owner's other public repositories as the coordinator lists them on BLOG-62 (read them there; this plan does not repeat them). Leave out this repo's own name and every private repository: this file is in a public repo.
+- [x] **Step 3a:** in `scripts/rules/comment-directives.txt` replace `python	^(pyright|ruff|isort|pylint|mypy):` with `python	^(pyright|ruff|flake8|isort|pylint|mypy):` and add the row `ts	^eslint\s` after the row `ts	^eslint-(disable|enable)` (tab-separated like every row): an inline ESLint configuration comment is a tool directive, and a `flake8:` comment too.
+- [x] **Step 4:** create `scripts/rules/comment-content-patterns.txt` (tab-separated `kind`, language, regex, message; no blank lines):
 
 ```
 content	all	\b(BLOG|PW|CKE|TA|PP|RR|PAIR)-\d+\b	names a ticket: delete the reference
@@ -464,7 +464,7 @@ disable	ts	eslint-disable.*\bno-warning-comments\b	switches off a comment lint r
 disable	ts	eslint\s+[^*]*\bno-warning-comments\b	changes a comment lint rule: delete it
 ```
 
-- [ ] **Step 5:** create `scripts/rules/comment_content.py`:
+- [x] **Step 5:** create `scripts/rules/comment_content.py`:
 
 ```python
 import re
@@ -605,9 +605,9 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 6:** in `scripts/rules/run.sh` replace `shared_block comment_count; do` with `shared_block comment_count comment_content; do`.
-- [ ] **Step 7:** in `backend/tests/test_rules.py`, in `test_a_clean_change_passes_every_rule`, add the line `"comment-content: ok (1 file(s) read)",` after `"  src.py: 0 -> 0",` in the expected list.
-- [ ] **Step 8:** in `backend/tests/test_comment_count.py` replace the body of `code_with_comments` with:
+- [x] **Step 6:** in `scripts/rules/run.sh` replace `shared_block comment_count; do` with `shared_block comment_count comment_content; do`.
+- [x] **Step 7:** in `backend/tests/test_rules.py`, in `test_a_clean_change_passes_every_rule`, add the line `"comment-content: ok (1 file(s) read)",` after `"  src.py: 0 -> 0",` in the expected list.
+- [x] **Step 8:** in `backend/tests/test_comment_count.py` replace the body of `code_with_comments` with:
 
 ```python
     lines = [f"x{i} = {i}" for i in range(code)]
@@ -616,15 +616,15 @@ if __name__ == "__main__":
 ```
 
 (the comments must follow the first code line, or `comment-content` reads them as an over-long header).
-- [ ] **Step 9:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && rm -rf ../scripts/rules/__pycache__ && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py tests/test_comment_count.py tests/test_comment_tokens.py tests/test_rules.py -q`. Expected: all pass.
-- [ ] **Step 10:** mutation checks, each must turn at least one test red, then restore: (a) in `repeats_owner` change `<=` to `==`; (b) in `header_lines` remove `or number in skipped`; (c) change `HEADER_LIMIT = 3` to `4`; (d) in `problems` change `wanted = "disable" if comment.directive else "content"` to always `"content"`; (e) in `comment-content-patterns.txt` delete the `(?!\s*:)` from the first `disable python` row; (f) remove the `PROJECT_NAME` branch in `problems`.
-- [ ] **Step 11:** `git add scripts/rules backend/tests && git commit -m "Add the comment-content rule"`.
+- [x] **Step 9:** `cd backend && poetry run ruff check --fix . ../scripts/rules && poetry run ruff format . ../scripts/rules && rm -rf ../scripts/rules/__pycache__ && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_comment_content.py tests/test_comment_count.py tests/test_comment_tokens.py tests/test_rules.py -q`. Expected: all pass.
+- [x] **Step 10:** mutation checks, each must turn at least one test red, then restore: (a) in `repeats_owner` change `<=` to `==`; (b) in `header_lines` remove `or number in skipped`; (c) change `HEADER_LIMIT = 3` to `4`; (d) in `problems` change `wanted = "disable" if comment.directive else "content"` to always `"content"`; (e) in `comment-content-patterns.txt` delete the `(?!\s*:)` from the first `disable python` row; (f) remove the `PROJECT_NAME` branch in `problems`.
+- [x] **Step 11:** `git add scripts/rules backend/tests && git commit -m "Add the comment-content rule"`.
 
 ### Task 3: Lint settings
 
 **Files:** modify `backend/pyproject.toml`, `frontend/eslint.config.mjs`; create `backend/tests/test_lint_settings.py`, `frontend/tests/lint-settings.test.ts`.
 
-- [ ] **Step 1:** create `backend/tests/test_lint_settings.py`:
+- [x] **Step 1:** create `backend/tests/test_lint_settings.py`:
 
 ```python
 import json
@@ -690,7 +690,7 @@ def test_no_ignore_turns_a_comment_rule_off():
     assert [c for c in CODES for i in ignored if c.startswith(i) or i == "ALL"] == []
 ```
 
-- [ ] **Step 2:** create `frontend/tests/lint-settings.test.ts`:
+- [x] **Step 2:** create `frontend/tests/lint-settings.test.ts`:
 
 ```ts
 // @vitest-environment node
@@ -730,8 +730,8 @@ describe("comment lint settings", () => {
 ```
 
 (the first line of this file is a Vitest environment directive, not a comment of ours.)
-- [ ] **Step 3:** red runs: `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_lint_settings.py -q` (expected: 5 failed, 2 passed: the ignore assertion passes already) and `cd frontend && npx vitest run tests/lint-settings.test.ts` (expected: 7 failed, 1 passed).
-- [ ] **Step 4:** in `backend/pyproject.toml` replace `select = ["E4", "E7", "E9", "F", "I"]` with `select = ["E4", "E7", "E9", "F", "I", "ERA001", "FIX001", "FIX002", "FIX003", "FIX004"]`. In `frontend/eslint.config.mjs` insert before `globalIgnores(`:
+- [x] **Step 3:** red runs: `cd backend && PYTHONDONTWRITEBYTECODE=1 poetry run pytest tests/test_lint_settings.py -q` (expected: 5 failed, 2 passed: the ignore assertion passes already) and `cd frontend && npx vitest run tests/lint-settings.test.ts` (expected: 7 failed, 1 passed).
+- [x] **Step 4:** in `backend/pyproject.toml` replace `select = ["E4", "E7", "E9", "F", "I"]` with `select = ["E4", "E7", "E9", "F", "I", "ERA001", "FIX001", "FIX002", "FIX003", "FIX004"]`. In `frontend/eslint.config.mjs` insert before `globalIgnores(`:
 
 ```js
   {
@@ -744,20 +744,20 @@ describe("comment lint settings", () => {
   },
 ```
 
-- [ ] **Step 5:** green runs: both commands of Step 3 (expected: `7 passed`; `8 passed`), then `cd backend && poetry run ruff check . ../scripts/rules` and `cd frontend && npm run lint`. Expected: no findings in either (measured on `main`).
-- [ ] **Step 6:** `git add backend frontend && git commit -m "Turn on the comment lint rules"`.
+- [x] **Step 5:** green runs: both commands of Step 3 (expected: `7 passed`; `8 passed`), then `cd backend && poetry run ruff check . ../scripts/rules` and `cd frontend && npm run lint`. Expected: no findings in either (measured on `main`).
+- [x] **Step 6:** `git add backend frontend && git commit -m "Turn on the comment lint rules"`.
 
 ### Task 4: Docs and wiring
 
-- [ ] **Step 1:** in `AGENTS.md`, in the CI sentence, replace `` `pr-size`, `spec-location`, `shared-block`, `comment-count`; violating inputs in `backend/tests/test_rules.py` and `test_comment_count.py`; what `comment-count` counts and how a file is excused: `docs/specs/2026-11-22-comment-count-rule.md` `` with `` `pr-size`, `spec-location`, `shared-block`, `comment-count`, `comment-content`; violating inputs in `backend/tests/test_rules.py`, `test_comment_count.py` and `test_comment_content.py`; what they check: `docs/specs/2026-11-22-comment-count-rule.md` and `docs/specs/2026-11-22-comment-content-rule.md`; lint settings for comments: Ruff `ERA001` and `FIX`, ESLint `no-warning-comments` ``.
-- [ ] **Step 2:** `bash scripts/rules/run.sh`. Expected: five ok lines (`comment-content` reads the files this PR touches and finds nothing).
-- [ ] **Step 3:** `git add AGENTS.md && git commit -m "Document the comment-content rule"`.
+- [x] **Step 1:** in `AGENTS.md`, in the CI sentence, replace `` `pr-size`, `spec-location`, `shared-block`, `comment-count`; violating inputs in `backend/tests/test_rules.py` and `test_comment_count.py`; what `comment-count` counts and how a file is excused: `docs/specs/2026-11-22-comment-count-rule.md` `` with `` `pr-size`, `spec-location`, `shared-block`, `comment-count`, `comment-content`; violating inputs in `backend/tests/test_rules.py`, `test_comment_count.py` and `test_comment_content.py`; what they check: `docs/specs/2026-11-22-comment-count-rule.md` and `docs/specs/2026-11-22-comment-content-rule.md`; lint settings for comments: Ruff `ERA001` and `FIX`, ESLint `no-warning-comments` ``.
+- [x] **Step 2:** `bash scripts/rules/run.sh`. Expected: five ok lines (`comment-content` reads the files this PR touches and finds nothing).
+- [x] **Step 3:** `git add AGENTS.md && git commit -m "Document the comment-content rule"`.
 
 ### Task 5: Verify, clean up, hand over
 
-- [ ] **Step 1:** `cd backend && poetry run ruff check . ../scripts/rules && poetry run ruff format --check . ../scripts/rules && poetry run pyright && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`; `cd frontend && npm test && npm run lint && npx tsc --noEmit`. Expected: no errors; all tests pass.
-- [ ] **Step 2:** cleanup commit under the comment standard in "Global constraints" (separate commit, "Delete comments that restate the code in the touched files"); record before and after comment lines per file on the ticket.
-- [ ] **Step 3:** run `auditing-branch-changes` (subagent) before `gh pr create`; fix findings.
-- [ ] **Step 4:** `git fetch && git merge origin/main`, push, `gh pr create --draft` (body: what changed, local checks, one `Comments: <path>: <reason>` line per file that keeps comments), set `Status: done (PR #n)` in the spec and this plan, push.
-- [ ] **Step 5:** wait with the bare `gh pr checks <n> -R Fredheda/Personal-Blog-Studio --watch --interval 60 --fail-fast` (or `gh run watch <id> ... --interval 60`) as a background task; when the draft's CI finished, `gh pr ready`, wait again, confirm every job ran, read the review `Verdict:` once, hand the URL to the coordinator.
-- [ ] **Step 6:** after merge: remove the worktree (no `--force`), delete the branch, check the remote branch is gone, `git pull --ff-only` in the main checkout, BLOG-62 to Done with what shipped.
+- [x] **Step 1:** `cd backend && poetry run ruff check . ../scripts/rules && poetry run ruff format --check . ../scripts/rules && poetry run pyright && PYTHONDONTWRITEBYTECODE=1 poetry run pytest -q`; `cd frontend && npm test && npm run lint && npx tsc --noEmit`. Expected: no errors; all tests pass.
+- [x] **Step 2:** cleanup commit under the comment standard in "Global constraints" (separate commit, "Delete comments that restate the code in the touched files"); record before and after comment lines per file on the ticket.
+- [x] **Step 3:** run `auditing-branch-changes` (subagent) before `gh pr create`; fix findings.
+- [x] **Step 4:** `git fetch && git merge origin/main`, push, `gh pr create --draft` (body: what changed, local checks, one `Comments: <path>: <reason>` line per file that keeps comments), set `Status: done (PR #n)` in the spec and this plan, push.
+- [x] **Step 5:** wait with the bare `gh pr checks <n> -R Fredheda/Personal-Blog-Studio --watch --interval 60 --fail-fast` (or `gh run watch <id> ... --interval 60`) as a background task; when the draft's CI finished, `gh pr ready`, wait again, confirm every job ran, read the review `Verdict:` once, hand the URL to the coordinator.
+- [x] **Step 6:** after merge: remove the worktree (no `--force`), delete the branch, check the remote branch is gone, `git pull --ff-only` in the main checkout, BLOG-62 to Done with what shipped.

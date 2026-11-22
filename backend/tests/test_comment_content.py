@@ -84,6 +84,16 @@ def test_a_shebang_and_a_directive_do_not_count_toward_the_header(tmp_path):
     assert content_output(tmp_path, {"src.py": text}).startswith("comment-content: ok")
 
 
+def test_trailing_comments_on_code_lines_are_not_header(tmp_path):
+    text = "a = 1  # a\nb = 2  # b\nc = 3  # c\nd = 4  # d\n"
+    assert content_output(tmp_path, {"src.py": text}).startswith("comment-content: ok")
+
+
+def test_a_trailing_comment_ends_the_header(tmp_path):
+    text = "# a\n# b\nx = 1  # c\n# d\n# e\n"
+    assert content_output(tmp_path, {"src.py": text}).startswith("comment-content: ok")
+
+
 def test_a_directive_inside_the_header_does_not_hide_its_length(tmp_path):
     text = "# a\n# ruff: noqa: F401\n# b\n# c\n# d\nx = 1\n"
     assert "the file header has 4 comment lines" in content_output(

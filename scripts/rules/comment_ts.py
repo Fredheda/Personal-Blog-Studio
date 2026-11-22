@@ -72,10 +72,17 @@ def comments(source: str) -> list[Comment]:
     previous_word = ""
     in_template = False
 
-    def record(text: str, first_line: int) -> None:
+    def record(text: str, first_line: int, start: int) -> None:
         end = first_line + text.count("\n")
+        before = source[source.rfind("\n", 0, start) + 1 : start]
         found.append(
-            Comment(first_line, end, text, directives.is_directive(text, "ts"))
+            Comment(
+                first_line,
+                end,
+                text,
+                directives.is_directive(text, "ts"),
+                own_line=not before.strip(),
+            )
         )
 
     while i < len(source):
@@ -106,12 +113,12 @@ def comments(source: str) -> list[Comment]:
         elif source.startswith("//", i):
             end = source.find("\n", i)
             end = len(source) if end == -1 else end
-            record(source[i:end], line)
+            record(source[i:end], line, i)
             i = end
         elif source.startswith("/*", i):
             end = source.find("*/", i + 2)
             end = len(source) if end == -1 else end + 2
-            record(source[i:end], line)
+            record(source[i:end], line, i)
             line += source.count("\n", i, end)
             i = end
         elif char in "'\"":
