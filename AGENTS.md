@@ -113,7 +113,7 @@ Copied from the owner's template. The `shared-block` rule fails CI when this blo
 
 **Pull requests.** At most 25 changed files and 5000 changed lines (lockfiles, fixtures, generated files and `docs/` excluded); the `pr-size` rule fails a larger PR unless the owner set the label `size-override`. Open a draft first. Before asking for review run `scripts/ci-local.sh` until it passes, then wait for CI, the security checks and the automated review, and fix or answer every comment. A PR that changes what a user sees carries a screenshot or a short video when you cannot offer a local run.
 
-**Tests first.** Write and run each behaviour's failing test before the code. Every test must catch a bug no other test catches; remove a test that does not.
+**Tests first.** Write and run each behaviour's failing test before the code. Every test must catch a bug no other test catches; remove a test that does not. Never commit a test that only proves something was removed: show that evidence once in the PR description. A test of behaviour the code still has stays, also when it asserts that something is refused or not forwarded.
 
 **Comments.** The default is no comment. Keep or add one only for a reason the code cannot show (a constraint, a security reason, a workaround with its source). When you edit a file, delete every comment in it that restates the code, narrates a change or points at a ticket, and every redundant test, in the same PR, in a separate commit; delete aggressively, git history keeps the rest. The `comment-count` rule fails a PR in which a file's comment count grows, unless the PR description has a line `Comments: <reason>`.
 
