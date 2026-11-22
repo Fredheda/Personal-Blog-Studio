@@ -2,7 +2,7 @@
 
 > **For agentic workers:** use `superpowers:executing-plans` (inline). Steps use checkbox syntax; flip each box when the step is done.
 
-**Status:** proposed. Spec: `docs/specs/2026-11-22-comment-content-rule.md`. Ticket: BLOG-62. Builds on the tokenizers of `comment-count` (merged, PR #71). The rules run with the repo's Python: use only standard-library features present in Python 3.12 and 3.13.
+**Status:** done (PR #73). Spec: `docs/specs/2026-11-22-comment-content-rule.md`. Ticket: BLOG-62. Builds on the tokenizers of `comment-count` (merged, PR #71). The rules run with the repo's Python: use only standard-library features present in Python 3.12 and 3.13.
 
 ## TL;DR
 
