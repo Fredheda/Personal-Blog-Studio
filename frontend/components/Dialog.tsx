@@ -14,10 +14,6 @@ type Props = {
   onConfirm: () => void;
 };
 
-/** A modal question (spec 7.7): a panel on `pane`, the cautious action on the
- *  left and the default action, white, on the right. Esc, a click on the
- *  backdrop and the cautious button all call `onCancel`. Focus starts on the
- *  cautious button, stays inside, and returns to where it was (`useModal`). */
 export function Dialog({ title, children, cancelLabel, confirmLabel, onCancel, onConfirm }: Props) {
   const titleId = useId();
   const textId = useId();

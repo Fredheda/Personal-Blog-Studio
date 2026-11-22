@@ -1,8 +1,6 @@
 import type { CheckProblem } from "./studio-api";
 
-/** Spec 7.3, first match wins. */
 export type SaveKind = "conflict" | "failed" | "saving" | "details" | "pending" | "saved";
-/** Spec 7.5: green filled, white ring, amber ring, red ring, grey ring. */
 export type Marker = "done" | "active" | "attention" | "failed" | "waiting";
 export type CheckState =
   | { phase: "running" }
@@ -27,7 +25,6 @@ export function saveKind(input: SaveInput): SaveKind {
   return "saved";
 }
 
-/** Save is enabled where there is something to send (spec 7.3: states 2, 4, 5). */
 export function saveEnabled(kind: SaveKind): boolean {
   return kind === "failed" || kind === "details" || kind === "pending";
 }
@@ -55,7 +52,6 @@ export function saveText(kind: SaveKind, ago: string): string {
 
 const MINUTE = 60_000;
 
-/** "just now", "2 min ago", "3 h ago", "2 d ago". A time ahead of `now` counts as now. */
 export function relativeTime(from: string, now: number): string {
   const minutes = Math.floor((now - Date.parse(from)) / MINUTE);
   if (minutes < 1) return "just now";
@@ -133,7 +129,7 @@ export function publishStep(
   };
 }
 
-/** Spec 7.3: Publish needs a saved post and a check without problems. A failed check does not block: the server validates again. A conflict has no title: the strip's Reload button is the way out. */
+/** A failed check does not block Publish: the server validates again. A conflict has no title: the strip's Reload button is the way out. */
 export function publishGate(input: { kind: SaveKind; check: CheckState; busy: boolean }): {
   enabled: boolean;
   title?: string;

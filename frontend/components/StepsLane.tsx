@@ -40,7 +40,6 @@ function Step({ n, name, view, children }: { n: number; name: string; view: Step
   );
 }
 
-/** The check's problems as cards (spec 7.5). With `onJump`, a problem that has a line is a button. */
 export function Problems({ problems, onJump }: { problems: CheckProblem[]; onJump?: (line: number) => void }) {
   return (
     <ul className="m-0 mt-2 list-none space-y-1.5 p-0">
@@ -68,7 +67,6 @@ export function Problems({ problems, onJump }: { problems: CheckProblem[]; onJum
   );
 }
 
-/** The numbered steps of a post (spec 7.5): Write, Check, Publish. */
 export function StepsLane({ write, check, publish, onUnpublish, onJump }: Props) {
   return (
     <ol aria-label="Steps" className="m-0 list-none space-y-5 p-0">
@@ -109,9 +107,6 @@ function Chip({ n, view, onOpen }: { n: number; view: StepView; onOpen?: () => v
   );
 }
 
-/** The steps as three chips under the top bar on a phone (spec 7.9). The Check
- *  chip opens the problems (when there are any), the Publish chip opens the
- *  Publish step with Unpublish. */
 export function StepChips({
   write,
   check,

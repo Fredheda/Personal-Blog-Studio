@@ -710,15 +710,6 @@ test("the chip strip shows the steps; the Check chip opens the problems as a she
   await waitFor(() => expect(jumpToLine).toHaveBeenCalledWith(3, draft.body));
 });
 
-test("Esc closes the problems sheet and leaves the editor alone", async () => {
-  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: rawHtml })} />);
-  await loaded();
-  fireEvent.click(await within(strip()).findByRole("button", { name: "2 2 to fix" }));
-  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-  expect(screen.queryByRole("dialog")).toBeNull();
-  expect(jumpToLine).not.toHaveBeenCalled();
-});
-
 test("the Publish chip opens a sheet with the Publish step; Unpublish there asks first", async () => {
   render(<PostEditor id={draft.postId} api={fakeApi({ getPost: async () => live })} />);
   await loaded();

@@ -5,7 +5,6 @@ import { useId, useRef, type ReactNode } from "react";
 import { Button } from "./Button";
 import { useModal } from "./useModal";
 
-/** A bottom sheet (spec 7.9), a modal like `Dialog`: Esc, Close and a click on the backdrop close it. */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const titleId = useId();
   const close = useRef<HTMLButtonElement>(null);

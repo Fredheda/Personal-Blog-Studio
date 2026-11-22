@@ -56,8 +56,8 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   const [body, setBody] = useState("");
   const [view, setView] = useState<"edit" | "preview">("edit");
   const [status, setStatus] = useState<AutosaveStatus>("idle");
-  const [error, setError] = useState<ApiError | null>(null); // details, publish, unpublish
-  const [bodyError, setBodyError] = useState<ApiError | null>(null); // autosave
+  const [error, setError] = useState<ApiError | null>(null);
+  const [bodyError, setBodyError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -87,7 +87,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setJumpMiss(handle.jumpToLine(line, markdown) ? null : line);
   }, []);
 
-  // A freshly loaded post: every field and both ETags.
   function adoptLoaded(draft: Draft) {
     setSaved(draft);
     setTitle(draft.title);
@@ -187,7 +186,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     current: () => ({ bodyEtag: bodyEtag.current, metaEtag: metaEtag.current }),
   });
 
-  // Unsaved details count too: leaving with an edited title or slug warns.
   const detailsUnsaved =
     saved !== null &&
     (title !== saved.title || slug !== saved.slug || summary !== saved.summary ||

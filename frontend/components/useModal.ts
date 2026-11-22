@@ -1,7 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
 
-/** Focus and keys of a modal panel: focus starts on `first`, Tab stays inside
- *  the panel's buttons, focus returns to where it was, Esc calls `onCancel`. */
 export function useModal(onCancel: () => void, first: RefObject<HTMLElement | null>) {
   const panel = useRef<HTMLDivElement>(null);
 
