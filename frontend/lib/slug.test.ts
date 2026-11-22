@@ -7,7 +7,12 @@ describe("slugInput", () => {
     expect(slugInput("Hello World_2!")).toBe("hello-world2");
   });
 
-  it("keeps hyphens so a slug can be typed one character at a time", () => {
+  it("keeps a trailing hyphen so a slug can be typed one character at a time", () => {
     expect(slugInput("a-")).toBe("a-");
+  });
+
+  it("collapses runs of hyphens and drops leading ones", () => {
+    expect(slugInput("-a--b")).toBe("a-b");
+    expect(slugInput("a -b")).toBe("a-b");
   });
 });

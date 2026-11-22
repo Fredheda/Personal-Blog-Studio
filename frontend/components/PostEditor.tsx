@@ -204,14 +204,13 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   }
   if (saved === null) return <p className="px-6 pt-10">Loading…</p>;
 
-  const metaDirty = detailsUnsaved;
   const bodyUnsaved = status === "pending" || status === "saving" || status === "error";
   const conflict = status === "conflict" || error?.status === 412 || bodyError?.status === 412;
   const kind = saveKind({
     conflict,
     bodyFailed: status === "error",
     saving: busy || status === "saving",
-    detailsUnsaved: metaDirty,
+    detailsUnsaved,
     bodyPending: status === "pending",
   });
   const ago = relativeTime(saved.updatedAt, now);
@@ -229,7 +228,7 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setNotice("");
     let ok = true;
     try {
-      if (metaDirty) {
+      if (detailsUnsaved) {
         try {
           const next = await client.patchMeta(id, { title, slug, summary, tags }, saved!.metaEtag);
           adoptDetails(next);

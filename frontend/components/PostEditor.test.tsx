@@ -371,7 +371,7 @@ test("a failed save shows the API's reason, not just its title", async () => {
   expect(alert.textContent).toContain("origin not allowed");
 });
 
-test("tags are optional: clearing the box saves an empty list, and a post without tags publishes", async () => {
+test("removing the last tag saves an empty list, and a post without tags publishes", async () => {
   const patchMeta = vi.fn(async () => ({ ...draft, tags: [], metaEtag: '"m2"' }));
   const publish = vi.fn(async () => ({ postId: draft.postId, slug: "hello", version: 1, publishedAt: "t", updatedAt: "t" }));
   render(<PostEditor id={draft.postId} api={fakeApi({ patchMeta, publish })} />);

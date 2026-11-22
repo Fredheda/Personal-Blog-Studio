@@ -73,6 +73,15 @@ describe("the slug pill", () => {
     expect(input.value).toBe("hello-world");
   });
 
+  it("drops a trailing hyphen when the input closes", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "/hello" }));
+    const input = screen.getByLabelText("Slug");
+    fireEvent.change(input, { target: { value: "hello-" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByRole("button", { name: "/hello" })).toBeTruthy();
+  });
+
   it("shows a dashed add button when empty", () => {
     render(<Harness initial={{ title: "T", summary: "", slug: "", tags: [] }} />);
     expect(screen.getByRole("button", { name: "Add a slug" })).toBeTruthy();

@@ -65,6 +65,11 @@ export function PostDetails({
     );
   }
 
+  function closeSlug() {
+    setEditingSlug(false);
+    if (slug.endsWith("-")) onSlug(slug.replace(/-+$/, ""));
+  }
+
   function addText(value: string) {
     const next = addTags(tags, value);
     if (next.length !== tags.length) onTags(next);
@@ -105,9 +110,9 @@ export function PostDetails({
             maxLength={100}
             value={slug}
             onChange={(e) => onSlug(slugInput(e.target.value))}
-            onBlur={() => setEditingSlug(false)}
+            onBlur={closeSlug}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === "Escape") setEditingSlug(false);
+              if (e.key === "Enter" || e.key === "Escape") closeSlug();
             }}
             className={`${PILL} w-48 outline-none`}
           />
