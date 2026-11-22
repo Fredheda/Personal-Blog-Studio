@@ -4,6 +4,6 @@ content	all	(?i)\b(used to be|(it|this|we|which) used to|no longer|git history|r
 disable	python	(?i)\bnoqa\b(?!\s*:)	switches off every lint rule: delete it
 disable	python	(?i)\bnoqa\s*:.*\b(ERA\d*|FIX\d*|ALL)\b	switches off a comment lint rule: delete it
 disable	python	\bruff:\s*(disable|enable|file-ignore|ignore)\s*\[[^\]]*\b(ERA\d*|FIX\d*|ALL)\b	switches off a comment lint rule: delete it
-disable	ts	eslint-(disable|enable)(-next-line|-line)?\s*(--.*)?(\*/)?\s*$	switches off every lint rule: delete it
-disable	ts	eslint-disable.*\bno-warning-comments\b	switches off a comment lint rule: delete it
+disable	ts	(?s)eslint-(disable|enable)(-next-line|-line)?\s*(--.*)?(\*/)?\s*$	switches off every lint rule: delete it
+disable	ts	(?s)eslint-disable.*\bno-warning-comments\b	switches off a comment lint rule: delete it
 disable	ts	eslint\s+[^*]*\bno-warning-comments\b	changes a comment lint rule: delete it

@@ -147,6 +147,8 @@ def test_a_docstring_that_says_more_passes(tmp_path):
         ("web/a.ts", "// eslint-disable-next-line\nexport {};\n"),
         ("web/a.ts", "/* eslint-disable */\nexport {};\n"),
         ("web/a.ts", "// eslint-disable-next-line no-warning-comments\nexport {};\n"),
+        ("web/a.ts", "/* eslint-disable\nno-warning-comments */\nexport {};\n"),
+        ("web/a.ts", "/* eslint-disable -- a\nb */\nexport {};\n"),
         ("web/a.ts", "// eslint-disable-line -- reason\nexport {};\n"),
     ],
 )
