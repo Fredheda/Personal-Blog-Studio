@@ -8,7 +8,7 @@ flowchart TB
   end
 
   subgraph github["GitHub"]
-    pr["Pull request description<br/>line: Comments: reason"]:::unchanged
+    pr["Pull request description<br/>line per file: Comments: path: reason"]:::unchanged
     api["REST API pulls/n"]:::unchanged
     summary["Job summary table"]:::unchanged
     subgraph job["CI job rules (ci.yml)"]
@@ -19,8 +19,10 @@ flowchart TB
       cc["comment_count.py"]:::new
       py["comment_python.py<br/>tokenize + ast"]:::new
       ts["comment_ts.py<br/>state machine"]:::new
+      hs["comment_hash.py<br/>sh, yml, yaml, toml, Dockerfile"]:::new
       dir["directives.py +<br/>comment-directives.txt"]:::new
     end
+    py312["setup-python<br/>backend/.python-version"]:::changed
   end
 
   subgraph repo["Repository (git history)"]
@@ -35,15 +37,18 @@ flowchart TB
     tr["test_rules.py"]:::changed
   end
 
-  cilocal -->|"COMMENTS_REASON"| run
+  cilocal -->|"COMMENTS_REASON: Comments lines"| run
   run --> size
   run --> loc
   run --> blk
   run --> cc
   cc --> py
   cc --> ts
+  cc --> hs
   py --> dir
   ts --> dir
+  hs --> dir
+  py312 --> run
   cc -->|"git show"| base
   cc -->|"git show"| head
   cc -->|"gh api"| api
