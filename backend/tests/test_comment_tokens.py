@@ -65,6 +65,7 @@ def test_hash_counts(source, expected):
         ("const r = /\\/\\/ x/;\n", 0),
         ("const q = b / 2 / 3; // c\n", 1),
         ("function f(s) { return /x/.test(s); } // c\n", 1),
+        ("function f(s) {\n  return /[//]/.test(s);\n}\n", 0),
         ("const q = (a) / 2; // c\n", 1),
         ("const p = <p>Don't // no</p>;\n// real\n", 1),
         ("const a = <a>x</a>; // c\n", 1),
