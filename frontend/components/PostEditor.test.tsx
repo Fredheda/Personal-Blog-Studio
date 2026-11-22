@@ -1,9 +1,24 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render as renderUi, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ApiError } from "../lib/problem";
 import type { Draft, StudioApi } from "../lib/studio-api";
 import { PostEditor } from "./PostEditor";
+import { TopBar } from "./TopBar";
+import { TopBarProvider } from "./TopBarSlot";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/posts/01AAAAAAAAAAAAAAAAAAAAAAAA" }));
+
+/** The editor puts Save, Publish and the save state into the top bar, so it renders inside one. */
+function render(ui: ReactElement) {
+  return renderUi(
+    <TopBarProvider>
+      <TopBar />
+      {ui}
+    </TopBarProvider>,
+  );
+}
 
 // The real editor is covered in CrepeEditor.test.tsx; here a textarea stands in.
 vi.mock("./CrepeEditor", () => ({
@@ -40,6 +55,10 @@ function fakeApi(overrides: Partial<StudioApi> = {}): StudioApi {
   const unused = async () => {
     throw new Error("unused");
   };
+  // The check answers with the ETags the saves returned, as the real one does.
+  const etags = { bodyEtag: draft.bodyEtag, metaEtag: draft.metaEtag };
+  const saveBody = overrides.saveBody;
+  const patchMeta = overrides.patchMeta;
   return {
     listPosts: unused,
     createPost: unused,
@@ -48,9 +67,29 @@ function fakeApi(overrides: Partial<StudioApi> = {}): StudioApi {
     patchMeta: unused,
     publish: unused,
     unpublish: async () => undefined,
+    deletePost: unused,
+    checkPost: async () => ({ ok: true, problems: [], ...etags }),
     ...overrides,
+    ...(saveBody && {
+      saveBody: async (...args: Parameters<StudioApi["saveBody"]>) => {
+        const answer = await saveBody(...args);
+        etags.bodyEtag = answer.bodyEtag;
+        return answer;
+      },
+    }),
+    ...(patchMeta && {
+      patchMeta: async (...args: Parameters<StudioApi["patchMeta"]>) => {
+        const answer = await patchMeta(...args);
+        etags.metaEtag = answer.metaEtag;
+        return answer;
+      },
+    }),
   } as StudioApi;
 }
+
+const lane = () => screen.getByRole("complementary", { name: "Post steps" });
+const loaded = () => screen.findByRole("complementary", { name: "Post steps" });
+const bar = () => screen.getByRole("banner");
 
 const problem = (status: number, title: string, detail?: string) =>
   new ApiError(status, { type: "about:blank", title, status, detail });
@@ -87,7 +126,7 @@ test("typing autosaves once after the pause, with the loaded ETag, and says Save
   await vi.advanceTimersByTimeAsync(1600);
   await waitFor(() => expect(saveBody).toHaveBeenCalledTimes(1));
   expect(saveBody).toHaveBeenCalledWith(draft.postId, "ab", '"b1"');
-  expect(await screen.findByText("Saved")).toBeTruthy();
+  expect(await within(bar()).findByText(/^Saved /)).toBeTruthy();
 });
 
 test("the second autosave sends the ETag the first one returned", async () => {
@@ -123,7 +162,7 @@ test("a failed autosave shows its reason and the text stays; the next good save 
   fireEvent.change(box, { target: { value: "smaller" } });
   await vi.advanceTimersByTimeAsync(1600);
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
-  expect(await screen.findByText("Saved")).toBeTruthy();
+  expect(await within(bar()).findByText(/^Saved /)).toBeTruthy();
 });
 
 test("a body save that gets no answer says the session may have expired and keeps the text", async () => {
@@ -146,7 +185,7 @@ test("a 412 from autosave shows the reload banner and keeps the text", async () 
   render(<PostEditor id={draft.postId} api={fakeApi({ saveBody })} />);
   fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "mine" } });
   await vi.advanceTimersByTimeAsync(1600);
-  expect(await screen.findByText(/changed elsewhere/i)).toBeTruthy();
+  expect((await screen.findByRole("alert")).textContent).toMatch(/changed elsewhere/i);
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("mine");
   expect(screen.getByRole("button", { name: "Reload the post" })).toBeTruthy();
 });
@@ -211,7 +250,7 @@ test("a body 412 after the details saved in the same Save shows the banner and k
   fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello-2" } });
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "typed text" } });
   fireEvent.click(saveButton());
-  expect(await screen.findByText(/changed elsewhere/i)).toBeTruthy();
+  expect((await screen.findByRole("alert")).textContent).toMatch(/changed elsewhere/i);
   expect(patchMeta).toHaveBeenCalledTimes(1);
   expect((screen.getByLabelText("Slug") as HTMLInputElement).value).toBe("hello-2");
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("typed text");
@@ -264,7 +303,7 @@ test("a details 412 shows the banner, answers not saved, and the typed body is s
   fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "hello-2" } });
   fireEvent.change(screen.getByLabelText("Body (Markdown)"), { target: { value: "typed text" } });
   fireEvent.click(saveButton());
-  expect(await screen.findByText(/changed elsewhere/i)).toBeTruthy();
+  expect((await screen.findByRole("alert")).textContent).toMatch(/changed elsewhere/i);
   await waitFor(() => expect(saveBody).toHaveBeenCalledWith(draft.postId, "typed text", '"b1"'));
   expect((screen.getByLabelText("Slug") as HTMLInputElement).value).toBe("hello-2");
 });
@@ -354,36 +393,208 @@ test("Publish stays disabled with unsaved details, and after a failed Save of ei
   expect(publish).not.toHaveBeenCalled();
 });
 
-test("a refused publish lists every problem with its line", async () => {
+const checkAnswer = (problems: { line: number; message: string }[]) => async () => ({
+  ok: problems.length === 0,
+  problems,
+  bodyEtag: draft.bodyEtag,
+  metaEtag: draft.metaEtag,
+});
+
+test("a loaded post shows its save state in the top bar and in the Write step", async () => {
+  render(<PostEditor id={draft.postId} api={fakeApi()} />);
+  expect((await within(bar()).findByRole("status")).textContent).toMatch(/^Saved /);
+  expect(within(lane()).getByText(/^Saved /)).toBeTruthy();
+});
+
+test("the post is checked when it opens and again after each save", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const saveBody = vi.fn(async () => ({ ...draft, bodyEtag: '"b2"', updatedAt: "2026-11-10T10:05:00Z" }));
+  const api = fakeApi({ saveBody });
+  const checkPost = vi.spyOn(api, "checkPost");
+  render(<PostEditor id={draft.postId} api={api} />);
+  await loaded();
+  await within(lane()).findByText("No problems found");
+  expect(checkPost).toHaveBeenCalledTimes(1);
+  fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "# New" } });
+  await vi.advanceTimersByTimeAsync(1600);
+  await waitFor(() => expect(checkPost).toHaveBeenCalledTimes(2));
+  await within(lane()).findByText("No problems found");
+});
+
+test("Publish waits for the check, with its reason", async () => {
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost: () => new Promise(() => {}) })} />);
+  const publish = await screen.findByRole("button", { name: "Publish" });
+  expect((publish as HTMLButtonElement).disabled).toBe(true);
+  expect(publish.title).toBe("Checking…");
+});
+
+test("Publish is off while the check lists problems, and the lane lists them", async () => {
+  const checkPost = checkAnswer([
+    { line: 3, message: "raw HTML is not allowed" },
+    { line: 0, message: "slug is required" },
+  ]);
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost })} />);
+  await loaded();
+  expect(await within(lane()).findByText("2 things to fix before publishing")).toBeTruthy();
+  expect(within(lane()).getByText("Line 3")).toBeTruthy();
+  expect(within(lane()).getByText("Slug is required")).toBeTruthy();
+  const publish = publishButton();
+  expect(publish.disabled).toBe(true);
+  expect(publish.title).toBe("Fix the problems under Check first");
+});
+
+test("a publish the server refuses although the check passed shows the amber strip and the refusal under Check", async () => {
   const publish = vi.fn(async () => {
     throw new ApiError(422, {
       type: "about:blank",
       title: "Unprocessable Content",
       status: 422,
-      problems: [
-        { line: 3, message: "raw HTML is not allowed" },
-        { line: 0, message: "slug is required" },
-      ],
+      problems: [{ line: 3, message: "raw HTML is not allowed" }],
     });
   });
   render(<PostEditor id={draft.postId} api={fakeApi({ publish })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
-  expect(await screen.findByText("Line 3: raw HTML is not allowed")).toBeTruthy();
-  expect(screen.getByText("slug is required")).toBeTruthy();
+  const button = await screen.findByRole("button", { name: "Publish" });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(button);
+  expect((await screen.findByRole("alert")).textContent).toBe("Not published: fix the problems listed under Check.");
+  expect(within(lane()).getByText("1 thing to fix before publishing")).toBeTruthy();
+  expect(within(lane()).getByText("Line 3")).toBeTruthy();
+  expect(publishButton().disabled).toBe(true);
   expect(publish).toHaveBeenCalledWith(draft.postId, '"b1"');
 });
 
-test("a successful publish says which version went live, and unpublish clears it", async () => {
+test("a successful publish says which version went live and the Publish step follows", async () => {
   const publish = vi.fn(async () => ({ postId: draft.postId, slug: "hello", version: 2, publishedAt: "t", updatedAt: "t" }));
-  const unpublish = vi.fn(async () => undefined);
-  render(<PostEditor id={draft.postId} api={fakeApi({ publish, unpublish })} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
-  expect(await screen.findByText(/Published as version 2\. It is live at \/blog\/hello\./)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Unpublish" }));
-  await waitFor(() => expect(unpublish).toHaveBeenCalledWith(draft.postId));
+  const live = {
+    ...draft,
+    published: true,
+    version: 2,
+    publishedAt: "2026-11-12T09:00:00Z",
+    versionPublishedAt: "2026-11-12T09:00:00Z",
+    slugLocked: true,
+  };
+  const getPost = vi.fn().mockResolvedValueOnce(draft).mockResolvedValue(live);
+  render(<PostEditor id={draft.postId} api={fakeApi({ publish, getPost })} />);
+  const button = await screen.findByRole("button", { name: "Publish" });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(button);
+  expect(await screen.findByText("Published as version 2. Live at /blog/hello.")).toBeTruthy();
   expect(
-    await screen.findByText(/Unpublished\. \/blog\/hello can stay on the live site for a few seconds\./),
+    await within(lane()).findByText("Published, version 2, on 12 Nov. Publish again to send your changes."),
   ).toBeTruthy();
+});
+
+test("Unpublish asks first; Esc keeps the post published; the answer unpublishes", async () => {
+  const live = {
+    ...draft,
+    published: true,
+    version: 1,
+    publishedAt: "2026-11-12T09:00:00Z",
+    versionPublishedAt: "2026-11-12T09:00:00Z",
+    slugLocked: true,
+  };
+  const unpublish = vi.fn(async () => undefined);
+  const getPost = vi.fn().mockResolvedValueOnce(live).mockResolvedValue(draft);
+  render(<PostEditor id={draft.postId} api={fakeApi({ unpublish, getPost })} />);
+  await loaded();
+  fireEvent.click(await within(lane()).findByRole("button", { name: "Unpublish" }));
+  expect(screen.getByRole("dialog", { name: "Unpublish this post?" })).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  expect(unpublish).not.toHaveBeenCalled();
+  fireEvent.click(within(lane()).getByRole("button", { name: "Unpublish" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Unpublish" }));
+  await waitFor(() => expect(unpublish).toHaveBeenCalledWith(draft.postId));
+  expect(await screen.findByText(/^Unpublished\./)).toBeTruthy();
+  expect(await within(lane()).findByText(/^Not published yet/)).toBeTruthy();
+});
+
+test("a green strip goes away with the next edit", async () => {
+  const publish = vi.fn(async () => ({ postId: draft.postId, slug: "hello", version: 1, publishedAt: "t", updatedAt: "t" }));
+  render(<PostEditor id={draft.postId} api={fakeApi({ publish })} />);
+  const button = await screen.findByRole("button", { name: "Publish" });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(button);
+  await screen.findByText(/^Published as version 1/);
+  fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Hello again" } });
+  expect(screen.queryByText(/^Published as version 1/)).toBeNull();
+});
+
+test("with a conflict Save and Publish stay off and the Write step says the post changed elsewhere", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const saveBody = vi.fn(async () => {
+    throw problem(412, "Precondition Failed");
+  });
+  render(<PostEditor id={draft.postId} api={fakeApi({ saveBody })} />);
+  fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "typed" } });
+  await vi.advanceTimersByTimeAsync(1600);
+  expect(await within(lane()).findByText("Not saved: the post changed elsewhere.")).toBeTruthy();
+  expect(saveButton().disabled).toBe(true);
+  expect(publishButton().disabled).toBe(true);
+});
+
+test("after Save of only the details the post is checked again", async () => {
+  const patchMeta = vi.fn(async () => ({
+    ...draft,
+    title: "Hello again",
+    metaEtag: '"m2"',
+    updatedAt: "2026-11-10T10:06:00Z",
+  }));
+  const api = fakeApi({ patchMeta });
+  const checkPost = vi.spyOn(api, "checkPost");
+  render(<PostEditor id={draft.postId} api={api} />);
+  await loaded();
+  await within(lane()).findByText("No problems found");
+  fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Hello again" } });
+  fireEvent.click(saveButton());
+  await waitFor(() => expect(checkPost).toHaveBeenCalledTimes(2));
+  await within(lane()).findByText("No problems found");
+});
+
+test("the refusal's problems go away with the next save", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const publish = vi.fn(async () => {
+    throw new ApiError(422, {
+      type: "about:blank",
+      title: "Unprocessable Content",
+      status: 422,
+      problems: [{ line: 3, message: "raw HTML is not allowed" }],
+    });
+  });
+  const saveBody = vi.fn(async () => ({ ...draft, bodyEtag: '"b2"', updatedAt: "2026-11-10T10:05:00Z" }));
+  render(<PostEditor id={draft.postId} api={fakeApi({ publish, saveBody })} />);
+  const button = await screen.findByRole("button", { name: "Publish" });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(button);
+  await within(lane()).findByText("Line 3");
+  fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "# Fixed" } });
+  await vi.advanceTimersByTimeAsync(1600);
+  await within(lane()).findByText("No problems found");
+  expect(within(lane()).queryByText("Line 3")).toBeNull();
+});
+
+test("after Reload the post the old answer is gone and the new post is checked", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const checkPost = vi
+    .fn<StudioApi["checkPost"]>()
+    .mockResolvedValueOnce({
+      ok: false,
+      problems: [{ line: 3, message: "old problem" }],
+      bodyEtag: draft.bodyEtag,
+      metaEtag: draft.metaEtag,
+    })
+    .mockReturnValue(new Promise(() => {}));
+  const saveBody = vi.fn(async () => {
+    throw problem(412, "Precondition Failed");
+  });
+  render(<PostEditor id={draft.postId} api={fakeApi({ checkPost, saveBody })} />);
+  await loaded();
+  await within(lane()).findByText("Line 3");
+  fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "typed" } });
+  await vi.advanceTimersByTimeAsync(1600);
+  fireEvent.click(await screen.findByRole("button", { name: "Reload the post" }));
+  await waitFor(() => expect(within(lane()).queryByText("Line 3")).toBeNull());
+  await waitFor(() => expect(within(lane()).getByText("Checking…")).toBeTruthy());
+  expect(checkPost).toHaveBeenCalledTimes(2);
 });
 
 test("Publish is disabled once autosave hit an error or a conflict", async () => {
@@ -400,12 +611,14 @@ test("Publish is disabled once autosave hit an error or a conflict", async () =>
 
 // --- preview ---
 
-test("the Preview tab renders the typed Markdown, maths as MathML, and keeps the editor text", async () => {
+test("Preview is a toggle that renders the typed Markdown, maths as MathML, and keeps the editor text", async () => {
   render(<PostEditor id={draft.postId} api={fakeApi()} />);
   fireEvent.change(await screen.findByLabelText("Body (Markdown)"), { target: { value: "# Big\n\n$a^2$" } });
-  fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  const toggle = screen.getByRole("button", { name: "Preview" });
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute("aria-pressed")).toBe("true");
   expect(document.querySelector(".post-body h1")?.textContent).toBe("Big");
   expect(document.querySelectorAll(".post-body math").length).toBeGreaterThan(0);
-  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.click(toggle);
   expect((screen.getByLabelText("Body (Markdown)") as HTMLTextAreaElement).value).toBe("# Big\n\n$a^2$");
 });

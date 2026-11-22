@@ -43,9 +43,10 @@ export type Published = {
   publishedAt: string;
   updatedAt: string;
 };
+export type CheckProblem = { line: number; message: string };
 export type CheckResult = {
   ok: boolean;
-  problems: { line: number; message: string }[];
+  problems: CheckProblem[];
   bodyEtag: string;
   metaEtag: string;
 };

@@ -5,6 +5,10 @@ const KIND = {
     role: "alert",
     look: "border-warn bg-[color-mix(in_srgb,var(--color-warn)_12%,var(--color-pane))]",
   },
+  warning: {
+    role: "alert",
+    look: "border-warn bg-[color-mix(in_srgb,var(--color-warn)_12%,var(--color-pane))]",
+  },
   error: {
     role: "alert",
     look: "border-err bg-[color-mix(in_srgb,var(--color-err)_12%,var(--color-pane))]",

@@ -11,7 +11,7 @@ test("an unpublished post says Draft", () => {
 });
 
 test("publishing says what is live and where", () => {
-  expect(publishedNotice(1, "hello")).toBe("Published as version 1. It is live at /blog/hello.");
+  expect(publishedNotice(1, "hello")).toBe("Published as version 1. Live at /blog/hello.");
 });
 
 test("unpublishing says the post can stay on the live site for a few seconds", () => {
