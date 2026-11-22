@@ -1,23 +1,16 @@
-import os
-import shutil
-import subprocess
-from pathlib import Path
-
 import pr_size
 import shared_block
 import spec_location
 
-RULES = Path(__file__).resolve().parents[2] / "scripts" / "rules"
-FIXTURES = Path(__file__).parent / "fixtures" / "rules"
-GOOD = (FIXTURES / "agents-block-good.md").read_text()
-
-
-def present(value: str | None) -> str:
-    assert value is not None
-    return value
-
-
-RECORDED = shared_block.digest(present(shared_block.extract(GOOD)))
+from tests.rules_support import (
+    FIXTURES,
+    GOOD,
+    RECORDED,
+    commit_all,
+    make_repo,
+    present,
+    run_rules,
+)
 
 
 def test_the_block_runs_from_the_start_marker_to_the_end_marker():
@@ -152,77 +145,6 @@ def test_ordinary_files_pass():
 def test_added_and_renamed_to_paths_are_read_from_name_status():
     rows = "A\tx.md\nM\ty.md\nD\tz.md\nR100\told.md\tdocs/shared/2026-11-22-new.md\n"
     assert spec_location.added_paths(rows) == ["x.md", "docs/shared/2026-11-22-new.md"]
-
-
-def make_repo(tmp_path: Path, agents: str = GOOD) -> Path:
-    shutil.copytree(
-        RULES,
-        tmp_path / "scripts" / "rules",
-        ignore=shutil.ignore_patterns("__pycache__"),
-    )
-    (tmp_path / "scripts" / "rules" / "shared-block.sha256").write_text(RECORDED + "\n")
-    (tmp_path / "AGENTS.md").write_text(agents)
-    for step in (
-        ["init", "-q", "-b", "main"],
-        ["add", "-A"],
-        [
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "-q",
-            "-m",
-            "base",
-        ],
-    ):
-        subprocess.run(["git", *step], cwd=tmp_path, check=True)
-    return tmp_path
-
-
-def commit_all(repo: Path) -> None:
-    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "-q",
-            "-m",
-            "change",
-        ],
-        cwd=repo,
-        check=True,
-    )
-
-
-def run_rules(repo: Path) -> subprocess.CompletedProcess:
-    base = subprocess.run(
-        ["git", "rev-parse", "HEAD~1"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("PR_NUMBER", "GITHUB_REPOSITORY")
-    }
-    return subprocess.run(
-        ["bash", "scripts/rules/run.sh"],
-        cwd=repo,
-        env={**env, "BASE_SHA": base},
-        capture_output=True,
-        text=True,
-    )
 
 
 def test_a_clean_change_passes_every_rule(tmp_path):
