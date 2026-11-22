@@ -118,6 +118,23 @@ def test_a_changed_plan_without_a_diagram_fails_too(tmp_path):
     assert output.startswith("plan-diagram: FAIL 1 problem(s)")
 
 
+def test_a_renamed_plan_needs_the_diagram_of_its_new_name(tmp_path):
+    repo = make_repo(tmp_path)
+    write(
+        repo, "docs/plans/2026-11-22-old.md", "# Old plan\n\nLong enough to rename.\n"
+    )
+    commit_all(repo)
+    (repo / "docs/plans/2026-11-22-old.md").rename(
+        repo / "docs/plans/2026-11-22-new.md"
+    )
+    commit_all(repo)
+    stdout = run_rules(repo).stdout
+    assert (
+        "  docs/plans/2026-11-22-new.md: add docs/plans/diagrams/2026-11-22-new.mmd"
+        in stdout
+    )
+
+
 def test_a_plan_that_the_pr_does_not_touch_is_not_read(tmp_path):
     before = {"docs/plans/2026-11-22-old.md": "# Old plan\n"}
     files = {"README.md": "# Readme\n"}
