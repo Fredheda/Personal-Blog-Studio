@@ -1,11 +1,8 @@
-# Studio API image. Build context is backend/: `docker build -f Dockerfile.studio .`
-# Contains blog_core and studio_api. The studio group (Markdown parser) is installed here only.
 FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS builder
 
 WORKDIR /app
 
-# Exact pins. PIP_UPLOADED_PRIOR_TO makes pip take Poetry's own dependencies
-# only from releases at least 14 days old (AGENTS.md, "Dependencies").
+# PIP_UPLOADED_PRIOR_TO: pip takes Poetry's own dependencies only from releases at least 14 days old.
 RUN pip install --no-cache-dir pip==26.2.2 \
     && PIP_UPLOADED_PRIOR_TO=P14D pip install --no-cache-dir poetry==2.5.1 \
     && poetry config virtualenvs.in-project true
