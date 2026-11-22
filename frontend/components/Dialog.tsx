@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 
 import { Button } from "./Button";
+import { useModal } from "./useModal";
 
 type Props = {
   title: string;
@@ -16,37 +17,12 @@ type Props = {
 /** A modal question (spec 7.7): a panel on `pane`, the cautious action on the
  *  left and the default action, white, on the right. Esc, a click on the
  *  backdrop and the cautious button all call `onCancel`. Focus starts on the
- *  cautious button, stays inside, and returns to where it was. */
+ *  cautious button, stays inside, and returns to where it was (`useModal`). */
 export function Dialog({ title, children, cancelLabel, confirmLabel, onCancel, onConfirm }: Props) {
   const titleId = useId();
   const textId = useId();
-  const panel = useRef<HTMLDivElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    cancel.current?.focus();
-    return () => before?.focus();
-  }, []);
-
-  function onKeyDown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      onCancel();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const buttons = [...(panel.current?.querySelectorAll("button") ?? [])];
-    const first = buttons[0];
-    const last = buttons[buttons.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last?.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first?.focus();
-    }
-  }
+  const { panel, onKeyDown } = useModal(onCancel, cancel);
 
   return (
     <div
