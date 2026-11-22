@@ -629,7 +629,7 @@ exit "$status"
 
 **Files:** modify `backend/pyproject.toml`, `scripts/ci-local.sh`, `.github/workflows/ci.yml`.
 
-- [ ] **Step 1: pyright and ruff.** In `backend/pyproject.toml` set `include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests", "../scripts/rules"]` and add `extraPaths = ["../scripts/rules"]` under `[tool.pyright]`. Run `cd backend && poetry run ruff check ../scripts/rules ../scripts/rules && poetry run ruff format --check ../scripts/rules && poetry run pyright`. Fix what they report in the new files (format with `ruff format ../scripts/rules` if it only reports layout). Expected: clean.
+- [ ] **Step 1: pyright and ruff.** In `backend/pyproject.toml` set `include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests", "../scripts/rules"]` and add `extraPaths = ["../scripts/rules"]` under `[tool.pyright]`. Run `cd backend && poetry run ruff check ../scripts/rules && poetry run ruff format --check ../scripts/rules && poetry run pyright`. Fix what they report in the new files (format with `ruff format ../scripts/rules` if it only reports layout). Expected: clean.
 - [ ] **Step 2: `ci-local.sh`.** In the `backend-lint` step append `&& poetry run ruff check ../scripts/rules && poetry run ruff format --check ../scripts/rules` inside the subshell; add before `step "frontend-test"`:
 
 ```bash
@@ -667,9 +667,9 @@ Run `cd backend && poetry run pytest tests/test_ci_parity.py -q`. Expected: it f
 
 - [ ] **Step 1: `AGENTS.md`.** Re-read the file. In the CI sentence add `rules` (`scripts/rules/run.sh`: `pr-size`, `spec-location`, `shared-block`; `comment-count` follows with BLOG-60) to the job list; add to the `main` ruleset sentence nothing (the owner decides on `rules` as a required check later). Keep the edit to those clauses.
 - [ ] **Step 2: cleanup commit** (separate): in every edited file, `ci.yml`, `ci-local.sh`, `pyproject.toml`, `AGENTS.md`, delete comments that restate the code and redundant tests; the comment count of each must not grow (`ci.yml`: 5 now). Commit `Delete comments that restate the code in the touched files`.
-- [ ] **Step 4: local checks.** `scripts/rules/run.sh` from the worktree (base `origin/main`): expected three `ok` lines. `./scripts/ci-local.sh` (needs Docker for the Azurite and actionlint steps; when Docker is not available say so in the PR and let CI run them).
-- [ ] **Step 5: branch audit** (`auditing-branch-changes`), `git merge origin/main`, draft PR, wait for the draft's CI (`gh pr checks <n> --watch --interval 60 --fail-fast`, bare, in the background), `gh pr ready`, wait again, confirm every job ran, including `rules`. Gate: on the PR itself the `rules` job log shows the three lines; on a throwaway branch of the worktree (not pushed) add 26 files and run `scripts/rules/run.sh` to see `pr-size: FAIL`. Hand over; the PR description names the owner's follow-up: decide on `rules` as a required check once it ran on `main`.
-- [ ] **Step 6:** after the merge: cleanup per the workspace rules, BLOG-59 Done; set `Status: done (PR #n)` in the spec and this plan in the same code PR (before merge).
+- [ ] **Step 3: local checks.** `scripts/rules/run.sh` from the worktree (base `origin/main`): expected three `ok` lines. `./scripts/ci-local.sh` (needs Docker for the Azurite and actionlint steps; when Docker is not available say so in the PR and let CI run them).
+- [ ] **Step 4: branch audit** (`auditing-branch-changes`), `git merge origin/main`, draft PR, wait for the draft's CI (`gh pr checks <n> --watch --interval 60 --fail-fast`, bare, in the background), `gh pr ready`, wait again, confirm every job ran, including `rules`. Gate: on the PR itself the `rules` job log shows the three lines; on a throwaway branch of the worktree (not pushed) add 26 files and run `scripts/rules/run.sh` to see `pr-size: FAIL`. Hand over; the PR description names the owner's follow-up: decide on `rules` as a required check once it ran on `main`.
+- [ ] **Step 5:** after the merge: cleanup per the workspace rules, BLOG-59 Done; set `Status: done (PR #n)` in the spec and this plan in the same code PR (before merge).
 
 ## Self-review
 
