@@ -53,7 +53,7 @@ Python 3.13 with Poetry 2 (backend); Node 26 with npm 12.2.2 (frontend, Next.js 
 | Browser tests | `cd frontend && npm run e2e` (builds first; `E2E_SKIP_BUILD=1` reuses `.next`; ports 3200, 8200, 8201 and 10000 to 10002 must be free) |
 | All CI checks | `./scripts/ci-local.sh` (the gate before `gh pr ready`) |
 
-CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint`, `storage-contract` (`tests/test_store_contract.py` against Azurite from its pinned image, so conditional writes meet real blob semantics), `frontend-test`, `frontend-checks` and `frontend-e2e` (draft PRs skip it and marking a PR ready runs it) on pull requests only; a push to `main` runs no CI, because the PR already ran it. Images are built on demand by the Deploy workflow, never by CI.
+CI (`.github/workflows/ci.yml`) runs `workflow-lint`, `backend-test`, `backend-lint` (which also lints `scripts/rules`), `rules` (`scripts/rules/run.sh`: `pr-size`, `spec-location`, `shared-block`; each has violating inputs in `backend/tests/test_rules.py`; `comment-count` follows in BLOG-60), `storage-contract` (`tests/test_store_contract.py` against Azurite from its pinned image, so conditional writes meet real blob semantics), `frontend-test`, `frontend-checks` and `frontend-e2e` (draft PRs skip it and marking a PR ready runs it) on pull requests only; a push to `main` runs no CI, because the PR already ran it. Images are built on demand by the Deploy workflow, never by CI.
 
 ## Gotchas
 
