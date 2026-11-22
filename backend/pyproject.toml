@@ -27,7 +27,7 @@ pyright = "1.1.414"
 jsonschema = "4.26.0"
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "../scripts/rules"]
 testpaths = ["tests"]
 
 [tool.ruff]
@@ -35,11 +35,11 @@ target-version = "py313"
 extend-exclude = [".venv"]
 
 [tool.ruff.lint]
-# ruff's default rules (E4, E7, E9, F) plus import sorting (I)
 select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pyright]
-include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests"]
+include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests", "../scripts/rules"]
+extraPaths = ["../scripts/rules"]
 pythonVersion = "3.13"
 typeCheckingMode = "basic"
 

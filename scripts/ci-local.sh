@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
-# Run every check .github/workflows/ci.yml runs, locally. It is the gate before
-# `gh pr ready`. A test in backend/tests keeps this file and ci.yml in step:
-# every ci.yml job id appears below as a `step "<job-id>"`.
-#
-# Needs `poetry install` once in backend/ and `npm ci` once in frontend/, plus
-# `cd frontend && npm run e2e:install` once (Chromium and the browser tests'
-# Azurite; a running local Azurite must be stopped: the tests use ports 10000
-# to 10002). workflow-lint uses a local `actionlint` if present, else Docker.
-#
-# Usage: ./scripts/ci-local.sh
+# Needs `poetry install` once in backend/, `npm ci` once in frontend/ and
+# `cd frontend && npm run e2e:install` once. A running local Azurite must be
+# stopped: the browser tests use ports 10000 to 10002.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,7 +21,10 @@ step "backend-test"
 (cd backend && poetry run pytest -v)
 
 step "backend-lint"
-(cd backend && poetry run ruff check . && poetry run ruff format --check . && poetry run pyright)
+(cd backend && poetry run ruff check . ../scripts/rules && poetry run ruff format --check . ../scripts/rules && poetry run pyright)
+
+step "rules"
+scripts/rules/run.sh
 
 step "storage-contract"
 docker run -d --rm --name blog-ci-azurite -p 127.0.0.1:10000:10000 mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5 \

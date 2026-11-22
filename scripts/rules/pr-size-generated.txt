@@ -1,0 +1,2 @@
+openapi/v1.json
+frontend/next-env.d.ts

@@ -1,7 +1,7 @@
 # The `rules` CI job: pr-size, spec-location, shared-block
 
 - **Ticket:** BLOG-59 (phase B2 of the multi-agent SDLC; owner decisions 569 to 576). Design source: the workspace spec `docs/shared/specs/2026-11-22-multi-agent-sdlc.md`, section 4.
-- **Status:** proposed. Plan: `docs/plans/2026-11-22-rules-ci-job.md`.
+- **Status:** done (PR #69). Plan: `docs/plans/2026-11-22-rules-ci-job.md`.
 
 ## Intent
 
