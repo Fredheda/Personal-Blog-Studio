@@ -157,6 +157,8 @@ def test_a_clean_change_passes_every_rule(tmp_path):
         "pr-size: ok (1 files, 1 lines)",
         "spec-location: ok",
         "shared-block: ok",
+        "comment-count: ok (0 -> 0)",
+        "  src.py: 0 -> 0",
     ]
 
 
