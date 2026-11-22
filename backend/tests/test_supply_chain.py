@@ -31,7 +31,17 @@ POETRY_PIN = re.compile(r"poetry==([0-9][0-9.]*)")
 NPX_DOWNLOAD = re.compile(r"\bnpx\s+(?:-y\b|--yes\b|[^\s@-]\S*@\S)")
 PINNED_IMAGE = re.compile(r"[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}")
 FROM = re.compile(r"FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?", re.I)
-DOCKER_RUN_VALUE_OPTIONS = {"-v", "--volume", "-w", "--workdir", "-e", "--env"}
+DOCKER_RUN_VALUE_OPTIONS = {
+    "-v",
+    "--volume",
+    "-w",
+    "--workdir",
+    "-e",
+    "--env",
+    "-p",
+    "--publish",
+    "--name",
+}
 
 
 def tracked(*patterns: str) -> list[Path]:
