@@ -35,7 +35,7 @@ target-version = "py313"
 extend-exclude = [".venv"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "ERA001", "FIX001", "FIX002", "FIX003", "FIX004"]
 
 [tool.pyright]
 include = ["blog_core", "studio_api", "blog_api", "dev_support", "tests", "../scripts/rules"]
