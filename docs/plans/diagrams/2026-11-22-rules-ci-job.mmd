@@ -1,0 +1,43 @@
+flowchart TB
+  subgraph github["GitHub pull request"]
+    pr["PR diff: files, lines, added paths"]
+    events["Label events API: who set size-override"]
+  end
+  subgraph repo["Repo"]
+    run["scripts/rules/run.sh"]
+    size["pr_size.py"]
+    loc["spec_location.py"]
+    block["shared_block.py"]
+    hash["shared-block.sha256"]
+    agents["AGENTS.md (shared block)"]
+    tests["backend/tests/test_rules.py with violating inputs"]
+    local["scripts/ci-local.sh step rules"]
+    ci["ci.yml job rules"]
+    lint["backend-lint: ruff on scripts/rules"]
+  end
+  template["Owner's template (hash recorded here)"]
+
+  ci --> run
+  local --> run
+  run --> size
+  run --> loc
+  run --> block
+  size -->|"git diff --numstat"| pr
+  size -->|"gh api, CI only"| events
+  loc -->|"git diff --name-status"| pr
+  block --> agents
+  block --> hash
+  hash -. "hash of" .-> template
+  tests --> size
+  tests --> loc
+  tests --> block
+  lint --> run
+
+  classDef new fill:#c8e6c9,stroke:#2e7d32,color:#000
+  classDef changed fill:#ffe0b2,stroke:#ef6c00,color:#000
+  classDef unchanged fill:#e0e0e0,stroke:#616161,color:#000
+  class run,size,loc,block,hash,tests,ci new
+  class local,lint changed
+  class pr,events,agents,template unchanged
+
+  legend["Legend: green new, amber changed (ci-local.sh gets a step, backend-lint also lints scripts/rules), grey unchanged."]:::unchanged
