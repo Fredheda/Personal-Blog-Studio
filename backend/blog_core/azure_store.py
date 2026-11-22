@@ -71,8 +71,6 @@ class AzureBlobStore:
                     content,
                     overwrite=True,
                     content_settings=settings,
-                    etag=if_match,
-                    match_condition=MatchConditions.IfNotModified,
                 )
             else:
                 result = blob.upload_blob(
