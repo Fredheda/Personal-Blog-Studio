@@ -1,7 +1,7 @@
 # The `comment-count` rule
 
 - **Ticket:** BLOG-60 (phase B3 of the multi-agent SDLC; owner decision 572: "have some flexibility for discretion ... overall comment count should be reduced significantly"). Design source: the workspace spec `docs/shared/specs/2026-11-22-multi-agent-sdlc.md`, section 3.
-- **Status:** done (PR #n). Plan: `docs/plans/2026-11-22-comment-count-rule.md`. Extends the `rules` job of BLOG-59 (merged, PR #69).
+- **Status:** done (PR #71). Plan: `docs/plans/2026-11-22-comment-count-rule.md`. Extends the `rules` job of BLOG-59 (merged, PR #69).
 
 ## Intent
 
