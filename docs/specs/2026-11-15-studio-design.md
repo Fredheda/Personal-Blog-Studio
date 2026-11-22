@@ -1,6 +1,6 @@
 # Studio design: pipeline page with a drafts lane
 
-Copied into the repo 2026-11-22 so cloud agents can read it.
+Copied into the repo 2026-11-22 so cloud agents can read it
 
 - **Status:** approved by the owner, 2026-11-15 (BLOG-32 comment 11306), browser tests included. The mockup was approved before (comment 11261). Builder check done (2026-11-15): edit time added to section 8, ticket order changed so each PR deploys alone.
 - **Date:** 2026-11-15
