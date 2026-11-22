@@ -1,9 +1,6 @@
 name: Claude Review
 
-# Reviews a PR once it is ready (not a draft) and on every push after that, and again whenever the
-# repo owner comments `@claude` on it. Each run draws on the Claude
-# subscription usage limit; the per-PR concurrency group cancels a review that
-# a newer push has made stale.
+# Each run draws on the Claude subscription usage limit.
 
 on:
   pull_request:
@@ -19,11 +16,7 @@ permissions:
 
 jobs:
   review:
-    # Fork PRs get no repo secrets, so skip them. Bots are skipped too, except
-    # the coding agents listed here and in allowed_bots below (keep the two
-    # lists in sync); Dependabot and every other bot never trigger a review.
-    # Draft PRs are skipped too: the review runs when a PR is marked ready, and
-    # on every push after that.
+    # Fork PRs get no repo secrets. Keep the bot list here and in allowed_bots in sync.
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
@@ -117,7 +110,6 @@ jobs:
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
 
   claude:
-    # Only the repo owner can ask for a re-review, and only on a PR.
     if: >-
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&

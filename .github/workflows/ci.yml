@@ -7,7 +7,6 @@ on:
     # ready_for_review: the browser tests skip drafts, so marking ready must run them.
     types: [opened, synchronize, reopened, ready_for_review]
 
-# A new push to the same PR cancels the run that is still going.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -16,7 +15,6 @@ permissions:
   contents: read
 
 jobs:
-  # Lints the workflow files with the pinned actionlint image.
   workflow-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -65,8 +63,6 @@ jobs:
       - run: poetry run ruff format --check .
       - run: poetry run pyright
 
-  # The storage contract (backend/tests/test_store_contract.py) against real blob
-  # semantics on Azurite: conditional writes, 409 and 412. No Azure, no secrets.
   storage-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -132,9 +128,6 @@ jobs:
       - run: npm run build
       - run: npx tsc --noEmit
 
-  # Browser tests: Playwright drives the production build in Chromium against
-  # the real studio API on Azurite (no Azure). A draft PR skips it; see
-  # AGENTS.md, "Browser tests".
   frontend-e2e:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -160,9 +153,6 @@ jobs:
       - run: npm install -g npm@12.2.2 && npm --version
       - run: npm ci
         working-directory: frontend
-      # Browser binaries are cached per lockfile (the Playwright version lives in
-      # it); the OS packages are installed on every run. Azurite's own locked
-      # install is cached by its lockfile hash.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
