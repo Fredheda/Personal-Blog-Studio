@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` or `superpowers:executing-plans`. Steps use checkbox (`- [ ]`) syntax; flip each box when done.
 
-**Status:** proposed.
+**Status:** done (PR #69).
 **Spec:** `docs/specs/2026-11-22-rules-ci-job.md`. Ticket BLOG-59, non-trivial; this plan and the spec merge as a docs-only PR first, the code PR follows from `main`.
 
 **Goal:** `scripts/rules/run.sh` runs `pr-size`, `spec-location` and `shared-block`, locally (`scripts/ci-local.sh`) and in the CI job `rules`; each rule was red on a violating input before it existed.
