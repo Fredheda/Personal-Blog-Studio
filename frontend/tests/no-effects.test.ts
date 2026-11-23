@@ -12,6 +12,7 @@ const SNIPPETS = {
   "a computed member call": 'import React from "react";\nReact["useLayoutEffect"](() => {}, []);\n',
   "a destructured binding": 'import React from "react";\nconst { useEffect } = React;\nuseEffect(() => {}, []);\n',
   "a renamed destructured binding": 'import React from "react";\nconst { useEffect: run } = React;\nrun(() => {}, []);\n',
+  "a quoted destructuring key": 'import React from "react";\nconst { "useEffect": run } = React;\nrun(() => {}, []);\n',
   "useLayoutEffect": 'import { useLayoutEffect } from "react";\nuseLayoutEffect(() => {}, []);\n',
   "useInsertionEffect": 'import { useInsertionEffect } from "react";\nuseInsertionEffect(() => {}, []);\n',
 };
@@ -19,6 +20,7 @@ const SNIPPETS = {
 const RE_EXPORTS = {
   "a named re-export": 'export { useEffect } from "react";\n',
   "a star re-export": 'export * from "react";\n',
+  "a local export of the hook": 'import { useEffect } from "react";\nexport { useEffect };\n',
 };
 
 const eslint = new ESLint({ cwd: process.cwd() });
