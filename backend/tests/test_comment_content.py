@@ -150,6 +150,11 @@ def test_a_docstring_that_says_more_passes(tmp_path):
         ("web/a.ts", "/* eslint-disable\nno-warning-comments */\nexport {};\n"),
         ("web/a.ts", "/* eslint-disable -- a\nb */\nexport {};\n"),
         ("web/a.ts", "// eslint-disable-line -- reason\nexport {};\n"),
+        ("web/a.ts", "// eslint-disable-next-line no-restricted-imports\nexport {};\n"),
+        ("web/a.ts", "/* eslint-disable no-restricted-syntax */\nexport {};\n"),
+        ("web/a.ts", '/* eslint no-restricted-syntax: "off" */\nexport {};\n'),
+        ("web/a.ts", "/* eslint no-restricted-imports: 0 */\nexport {};\n"),
+        ("web/a.ts", "/* eslint-disable\nno-restricted-imports */\nexport {};\n"),
     ],
 )
 def test_switching_off_a_comment_lint_rule_or_all_rules_fails(tmp_path, path, text):

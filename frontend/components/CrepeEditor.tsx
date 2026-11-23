@@ -1,9 +1,6 @@
 "use client";
 
-// The theme's own `common/style.css` also pulls in `common/latex.css`, which
-// imports KaTeX's stylesheet and with it eight font families. Maths is MathML
-// only here, so the parts are imported one by one, without latex.css, and the
-// two rules the maths editing popup needs live in app/globals.css.
+// Theme parts are imported one by one: common/latex.css would pull in KaTeX's fonts.
 import "@milkdown/crepe/theme/common/prosemirror.css";
 import "@milkdown/crepe/theme/common/reset.css";
 import "@milkdown/crepe/theme/common/block-edit.css";
@@ -17,8 +14,9 @@ import "@milkdown/crepe/theme/common/table.css";
 import "@milkdown/crepe/theme/classic-dark.css";
 
 import { Crepe } from "@milkdown/crepe";
-import { useEffect, useRef } from "react";
 
+import { useLatest } from "../effects/useLatest";
+import { useWidget } from "../effects/useWidget";
 import { crepeFeatureConfigs, crepeFeatures } from "../lib/crepe-config";
 import { jumpTarget } from "../lib/line-map";
 import { normaliseMarkdown } from "../lib/normalise";
@@ -42,22 +40,12 @@ function placeCaret(editor: HTMLElement, block: Element) {
   block.scrollIntoView?.({ block: "center" });
 }
 
-/** Milkdown Crepe as a Markdown editor. `initial` is read once, at mount: the
- *  parent remounts it with a new `key` to replace the text (reload). Nothing is
- *  reported until the owner changes the text: whatever Crepe makes of the loaded
- *  Markdown is taken as the baseline, so opening a post never writes it. */
+/** `initial` is read once, at mount; nothing is reported until the text changes. */
 export function CrepeEditor({ initial, onChange, onReady }: Props) {
-  const host = useRef<HTMLDivElement>(null);
-  const latestOnChange = useRef(onChange);
-  const latestOnReady = useRef(onReady);
-  useEffect(() => {
-    latestOnChange.current = onChange;
-    latestOnReady.current = onReady;
-  });
+  const latestOnChange = useLatest(onChange);
+  const latestOnReady = useLatest(onReady);
 
-  useEffect(() => {
-    const root = host.current;
-    if (root === null) return;
+  const host = useWidget<HTMLDivElement>((root) => {
     const crepe = new Crepe({
       root,
       defaultValue: initial,
@@ -97,9 +85,7 @@ export function CrepeEditor({ initial, onChange, onReady }: Props) {
       latestOnReady.current?.(null);
       void crepe.destroy();
     };
-    // `initial` is a mount-time input by design.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
 
   return <div ref={host} className="crepe-host" />;
 }

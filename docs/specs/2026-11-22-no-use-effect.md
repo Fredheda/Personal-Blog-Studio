@@ -1,7 +1,7 @@
 # No `useEffect`: a lint rule, one folder of named hooks, and the removal
 
 - **Ticket:** BLOG-61 (owner, 2026-11-22: "I don't like the use-effect thing in javascript as it seems like almost always it is a bit of an anti pattern. Can we add a lint rule against it remove use-effect across repos?"; decision 583 A: effects are banned everywhere except one small folder of named hooks, no new dependency).
-- **Status:** proposed. Plan: `docs/plans/2026-11-22-no-use-effect.md`.
+- **Status:** done (PR #81). Plan: `docs/plans/2026-11-22-no-use-effect.md`.
 
 ## Intent
 

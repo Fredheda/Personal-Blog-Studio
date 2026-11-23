@@ -15,6 +15,7 @@ export default defineConfig({
       "app/**/*.test.{ts,tsx}",
       "lib/**/*.test.{ts,tsx}",
       "components/**/*.test.{ts,tsx}",
+      "effects/**/*.test.{ts,tsx}",
       "tests/**/*.test.ts",
       "scripts/**/*.test.ts",
     ],

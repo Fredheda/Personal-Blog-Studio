@@ -2,9 +2,13 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useController } from "../effects/useController";
+import { useInterval } from "../effects/useInterval";
+import { useRequest } from "../effects/useRequest";
+import { useWindowListener } from "../effects/useWindowListener";
 import { createAutosave, type AutosaveStatus } from "../lib/autosave";
 import { publishedNotice, unpublishedNotice } from "../lib/live-status";
 import { ApiError } from "../lib/problem";
@@ -70,7 +74,6 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
   // The ETags live in refs so two saves in a row never send a stale one.
   const bodyEtag = useRef("");
   const metaEtag = useRef("");
-  const autosave = useRef<ReturnType<typeof createAutosave> | null>(null);
   const running = useRef(false);
   const editor = useRef<EditorHandle | null>(null);
   const pendingJump = useRef<{ line: number; markdown: string } | null>(null);
@@ -119,56 +122,41 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     setTags(draft.tags);
   }
 
-  useEffect(() => {
-    let alive = true;
-    client
-      .getPost(id)
-      .then((draft) => alive && adoptLoaded(draft))
-      .catch((e) => alive && setLoadError(toApiError(e)));
-    return () => {
-      alive = false;
-    };
-  }, [client, id, reloadKey]);
+  const loadKey = useMemo(() => ({ client, id, reloadKey }), [client, id, reloadKey]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
+  useRequest(() => client.getPost(id), loadKey, {
+    onResult: adoptLoaded,
+    onError: (e) => setLoadError(toApiError(e)),
+  });
 
-  useEffect(() => {
-    // `alive` goes false in the cleanup, before the closing flush runs: that
-    // flush still sends the text, but its late answer must not touch the
-    // status, the error, the ETag or `saved` of the post that replaced it
-    // (after "Reload the post" or a change of post).
-    let alive = true;
-    const controller = createAutosave({
-      delayMs: 1500,
-      onStatus: (s) => {
-        if (alive) setStatus(s);
-      },
-      save: async (text) => {
-        try {
-          const next = await client.saveBody(id, text, bodyEtag.current);
-          if (alive) {
-            bodyEtag.current = next.bodyEtag;
-            setSaved((previous) =>
-              previous === null ? previous : { ...previous, body: text, bodyEtag: next.bodyEtag, updatedAt: next.updatedAt },
-            );
-            setBodyError(null);
-            setSaves((n) => n + 1);
+  useInterval(() => setNow(Date.now()), 30_000);
+
+  const autosave = useController(
+    (alive) =>
+      createAutosave({
+        delayMs: 1500,
+        onStatus: (s) => {
+          if (alive()) setStatus(s);
+        },
+        save: async (text) => {
+          try {
+            const next = await client.saveBody(id, text, bodyEtag.current);
+            if (alive()) {
+              bodyEtag.current = next.bodyEtag;
+              setSaved((previous) =>
+                previous === null ? previous : { ...previous, body: text, bodyEtag: next.bodyEtag, updatedAt: next.updatedAt },
+              );
+              setBodyError(null);
+              setSaves((n) => n + 1);
+            }
+          } catch (e) {
+            if (alive()) setBodyError(toApiError(e));
+            throw e;
           }
-        } catch (e) {
-          if (alive) setBodyError(toApiError(e));
-          throw e;
-        }
-      },
-    });
-    autosave.current = controller;
-    return () => {
-      alive = false;
-      void controller.close();
-    };
-  }, [client, id, reloadKey]);
+        },
+      }),
+    loadKey,
+  );
 
   const check = useCheck({
     api: client,
@@ -183,16 +171,9 @@ export function PostEditor({ id, api }: { id: string; api?: StudioApi }) {
     (title !== saved.title || slug !== saved.slug || summary !== saved.summary ||
       tags.join(",") !== saved.tags.join(","));
 
-  useEffect(() => {
-    const unsaved =
-      detailsUnsaved || status === "pending" || status === "saving" || status === "error" || status === "conflict";
-    if (!unsaved) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [status, detailsUnsaved]);
+  const unsaved =
+    detailsUnsaved || status === "pending" || status === "saving" || status === "error" || status === "conflict";
+  useWindowListener("beforeunload", (event) => event.preventDefault(), unsaved);
 
   if (loadError) {
     return (
